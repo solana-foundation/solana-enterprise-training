@@ -66,6 +66,11 @@ A curated collection of references, tools, and supplementary materials.
 - [Solana DeFi Overview - DeFiLlama](https://defillama.com/chain/Solana)
 - [Solana Lending Markets Report 2025 - RedStone](https://blog.redstone.finance/2025/12/11/solana-lending-markets/)
 
+## Payments
+
+- [Solana Pay Documentation](https://docs.solanapay.com/)
+- [@solana/instruction-plans](https://www.npmjs.com/package/@solana/instruction-plans)
+
 ## Slide Decks
 
 - [Solana Overview Slides](https://docs.google.com/presentation/d/1C4mEhjs83HvIVG_VeXH30I4m5h2hGK9vjOiKWf63TSM/edit?usp=sharing)
@@ -74,3 +79,4 @@ A curated collection of references, tools, and supplementary materials.
 - [Token Extensions Program Slides](https://docs.google.com/presentation/d/1BgGwCRM-_oOuJEb1_guYS6IwCF_9w2odTIQujs5byvc/edit?usp=sharing)
 - [RWAs on Solana Slides](https://docs.google.com/presentation/d/16y_jKuaxeoiWLZlFzESOXqQ2Z1ij9G3t0PKLVvf55-8/edit?usp=sharing)
 - [DeFi on Solana Slides](https://docs.google.com/presentation/d/1dfxjxkYgLg7nMD7uXt2H-kdEILQOQcvqm-btso--YjM/edit?usp=sharing)
+- [Payments Slides - PLACEHOLDER]

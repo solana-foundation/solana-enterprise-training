@@ -110,6 +110,21 @@ The course is divided into several modules, each designed for a half-day instruc
 
 **Slides:** [Link to DeFi on Solana slides - PLACEHOLDER]
 
+### Module 7 - Payments on Solana
+
+**Duration:** Half-day
+
+**Topics:**
+- Limitations of traditional payment rails: settlement latency, fees, programmability, cross-border friction
+- Why Solana for enterprise payments: instant settlement, sub-cent fees, local fee markets, programmable compliance
+- Mapping traditional payment concepts to Solana primitives: wallets, token mints, ATAs
+- Wallets, payment parties, and fee payer abstraction
+- Associated Token Accounts in payment flows
+- Batch payments, transaction atomicity, and scaling
+- Enterprise use cases: payroll, fund settlement, supply chain payments, cross-border B2B
+
+**Slides:** [Link to Payments slides - PLACEHOLDER]
+
 ## Assessment Approach
 
 Each module includes a hands-on challenge that requires participants to apply the concepts covered. Challenges are designed to be completed within the session with instructor support and/or off session in order to consolidate concept.

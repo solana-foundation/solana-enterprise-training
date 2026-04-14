@@ -16,6 +16,7 @@ This training program is structured into several modules that progressively buil
 | 4 | [Token Extensions Program](module-4-token-extensions-program/) | Token-2022 extensions, Token ACL, and enterprise compliance features |
 | 5 | [RWAs on Solana](module-5-rwas-on-solana/) | Real world asset tokenization, compliance infrastructure, and DeFi composability |
 | 6 | [DeFi on Solana](module-6-defi-on-solana/) | DeFi primitives, major protocols, and enterprise applications |
+| 7 | [Payments](module-7-payments/) | Enterprise payment infrastructure, batch transfers, and cross-border settlement |
 
 ## Prerequisites
 
@@ -59,7 +60,11 @@ enterprise-training/
 │   ├── README.md
 │   ├── examples/
 │   └── challenge/
-└── module-6-defi-on-solana/
+├── module-6-defi-on-solana/
+│   ├── README.md
+│   ├── examples/
+│   └── challenge/
+└── module-7-payments/
     ├── README.md
     ├── examples/
     └── challenge/

@@ -1,0 +1,26 @@
+{
+  "name": "mosaic-stablecoin-demo",
+  "version": "1.0.0",
+  "description": "Enterprise stablecoin demo using Solana Mosaic SDK - compliance, access control, and asset seizure",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "create-token": "npx tsx src/01-create-stablecoin.ts",
+    "mint-tokens": "npx tsx src/02-mint-tokens.ts",
+    "blocklist": "npx tsx src/03-blocklist-address.ts",
+    "force-transfer": "npx tsx src/04-force-transfer.ts",
+    "pause-token": "npx tsx src/05-pause-token.ts",
+    "inspect-token": "npx tsx src/06-inspect-token.ts"
+  },
+  "dependencies": {
+    "@solana/kit": "^5.0.0",
+    "@solana-program/system": "^0.10.0",
+    "@solana-program/token-2022": "^0.6.1",
+    "@solana/mosaic-sdk": "^0.1.1",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.3"
+  }
+}
