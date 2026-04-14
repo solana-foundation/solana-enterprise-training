@@ -1,0 +1,21 @@
+{
+  "name": "stablecoins-mosaic",
+  "version": "1.0.0",
+  "description": "Enterprise stablecoin payment examples using the Mosaic SDK",
+  "type": "module",
+  "scripts": {
+    "single-transfer": "npx tsx src/single-transfer.ts",
+    "batch-transfer": "npx tsx src/batch-transfer.ts"
+  },
+  "dependencies": {
+    "@solana/mosaic-sdk": "^0.1.1",
+    "@solana/kit": "^5.0.0",
+    "@solana-program/token-2022": "^0.6.1",
+    "@solana-program/memo": "^0.10.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
