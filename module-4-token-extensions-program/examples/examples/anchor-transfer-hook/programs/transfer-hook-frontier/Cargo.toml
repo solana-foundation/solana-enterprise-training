@@ -1,0 +1,42 @@
+[package]
+name = "transfer-hook-frontier"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "transfer_hook_frontier"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+
+[dependencies]
+anchor-lang = "1.0.0"
+anchor-spl = "1.0.0"
+# Library defining a generic state interface to encode additional required accounts for an instruction, using Type-Length-Value structures
+spl-tlv-account-resolution = "0.11.1"
+# Library with helper to resolve additional accounts
+spl-discriminator = "0.5.2"
+spl-transfer-hook-interface = "2.1.0"
+
+[dev-dependencies]
+litesvm = "0.10.0"
+solana-message = "3.0.1"
+solana-transaction = "3.0.2"
+solana-signer = "3.0.0"
+solana-keypair = "3.0.1"
+solana-pubkey = "4.1.0"
+
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
