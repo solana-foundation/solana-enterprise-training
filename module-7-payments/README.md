@@ -23,7 +23,7 @@ By the end of this module, participants will be able to:
 
 ## Slides
 
-[Payments on Solana slides](https://docs.google.com/presentation/d/1r0NH_Wl8IaxayDh_cKcUzPIfKqaiCahvILANlokdHgg/edit?usp=sharing)
+[Link to Payments Slides - PLACEHOLDER]
 
 ---
 
