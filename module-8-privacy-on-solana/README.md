@@ -29,7 +29,7 @@ By the end of this module, participants will be able to:
 
 ## Slides
 
-[Link to Privacy Slides - PLACEHOLDER]
+[Privacy on Solana Slides](https://docs.google.com/presentation/d/1TCHMCpv6i3vFZAT68btsTQOMncXXMk1I70hyIZUEHSY/edit?usp=sharing)
 
 ---
 

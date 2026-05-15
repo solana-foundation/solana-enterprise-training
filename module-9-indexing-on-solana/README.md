@@ -26,7 +26,7 @@ By the end of this module, participants will be able to:
 
 ## Slides
 
-[Link to Indexing Slides - PLACEHOLDER]
+[Indexing on Solana Slides](https://docs.google.com/presentation/d/1L9-0ysJwsv8aAsd9l-g9nr_PIEBcnf9Itrp2YXtCmyA/edit?usp=sharing)
 
 ---
 

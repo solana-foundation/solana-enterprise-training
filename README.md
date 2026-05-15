@@ -32,7 +32,7 @@ Understanding of general programming concepts and basic familiarity with blockch
 ## Getting Started
 
 1. Review the [Course Plan](course-plan.md) for an overview of the full curriculum
-2. Work through the modules in order, starting with [Module 1: Solana Overview](module-1-solana-overview/)
+2. Starting with [Module 1: Solana Overview](module-1-solana-overview/)
 3. Complete the hands-on exercises and challenges in each module before proceeding to the next
 
 ## Repository Structure
