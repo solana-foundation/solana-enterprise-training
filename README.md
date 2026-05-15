@@ -18,6 +18,7 @@ This training program is structured into several modules that progressively buil
 | 6 | [DeFi on Solana](module-6-defi-on-solana/) | DeFi primitives, major protocols, and enterprise applications |
 | 7 | [Payments](module-7-payments/) | Enterprise payment infrastructure, batch transfers, and cross-border settlement |
 | 8 | [Privacy on Solana](module-8-privacy-on-solana/) | Confidential Transfers, Contra payment channels, and Solana Permissioned Environments |
+| 9 | [Indexing on Solana](module-9-indexing-on-solana/) | Geyser, Yellowstone gRPC, indexing frameworks, storage strategies, and real-time streaming |
 
 ## Prerequisites
 
@@ -69,7 +70,11 @@ enterprise-training/
 │   ├── README.md
 │   ├── examples/
 │   └── challenge/
-└── module-8-privacy-on-solana/
+├── module-8-privacy-on-solana/
+│   ├── README.md
+│   ├── examples/
+│   └── challenge/
+└── module-9-indexing-on-solana/
     ├── README.md
     ├── examples/
     └── challenge/
