@@ -11,6 +11,7 @@ This training program is structured into several modules that progressively buil
 | # | Module | Description |
 |---|--------|-------------|
 | 1 | [Solana Overview](module-1-solana-overview/) | Platform architecture, accounts, transactions, and the Solana data model |
+| 1B | [From EVM to SVM](module-1b-from-evm-to-svm/) | Account model translation, ERC-20 vs SPL, CPI vs call, reentrancy, transactions, and tooling for EVM-native teams |
 | 2 | [Rust Concepts & Anchor](module-2-rust-concepts-and-anchor/) | Rust fundamentals for Solana and the Anchor framework |
 | 3 | [SPL Tokens](module-3-spl-tokens/) | Token Program, mint and token accounts, metadata, and minting tokens |
 | 4 | [Token Extensions Program](module-4-token-extensions-program/) | Token-2022 extensions, Token ACL, and enterprise compliance features |
@@ -32,7 +33,7 @@ Understanding of general programming concepts and basic familiarity with blockch
 ## Getting Started
 
 1. Review the [Course Plan](course-plan.md) for an overview of the full curriculum
-2. Starting with [Module 1: Solana Overview](module-1-solana-overview/)
+2. Work through the modules in order, starting with [Module 1: Solana Overview](module-1-solana-overview/)
 3. Complete the hands-on exercises and challenges in each module before proceeding to the next
 
 ## Repository Structure
@@ -46,6 +47,8 @@ enterprise-training/
 │   ├── README.md
 │   ├── examples/
 │   └── challenge/
+├── module-1b-from-evm-to-svm/
+│   └── README.md
 ├── module-2-rust-concepts-and-anchor/
 │   ├── README.md
 │   ├── examples/
