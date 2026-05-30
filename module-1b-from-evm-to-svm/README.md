@@ -145,7 +145,9 @@ pub mod counter {
 }
 
 #[account]
-pub struct Counter { pub value: u64 }
+pub struct Counter { 
+  pub value: u64 
+}
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -269,7 +271,7 @@ verifies that the corresponding account in the transaction has signed.
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
     pub user: Signer<'info>,           // declared signer
-    #[account(mut, has_one = user)]    // verifies the vault belongs to the signer
+    #[account(mut, has_one = user)]    // verifies the vault belongs to the signer (or through seeds)
     pub vault: Account<'info, Vault>,
 }
 ```
@@ -563,7 +565,7 @@ budget, and priority fees.
 
 ### Recent blockhash and expiry
 
-There is no nonce on Solana. Instead, every transaction includes a
+"There is no nonce on Solana." Instead, every transaction includes a
 **recent blockhash** — a 32-byte commitment to a recent block. A transaction
 is valid only if its blockhash is recent enough: roughly the last 150 slots
 (~60 seconds at 400 ms slots).
@@ -634,21 +636,6 @@ A common production-grade payment send looks like:
 5. Poll for landing; retry with a fresh blockhash and a higher priority fee
    if it doesn't land
 
-### Local fee markets
-
-A 2024 change to the Solana fee market made it **per-writable-account**, not
-global. If account A is congested, transactions that write to A pay more —
-but transactions that write only to B are unaffected by A's congestion.
-
-For an institutional issuer running a high-throughput token, this is the
-single most consequential operational fact about the chain. A swap-heavy
-period on a popular AMM does not slow down a payments program writing to
-completely different accounts.
-
-The practical implication: priority fees should be sized against the *actual
-contended accounts* in your transaction, not a global "is the network busy"
-signal. Provider APIs (Helius, Triton) handle this.
-
 ## 8. Commitment levels: a decision framework
 
 Solana exposes three commitment levels for transaction confirmation. Choosing
@@ -696,16 +683,12 @@ asks.
 
 - **LiteSVM:** in-process Solana runtime in Rust. Fastest test option. Best
   for unit-level testing of program logic. Used in the Module 2 vault tests.
-- **Bankrun / Mollusk:** similar to LiteSVM but with different ergonomic
-  trade-offs. Bankrun has a TypeScript front-end.
+- **Mollusk:** similar to LiteSVM but with different ergonomic
+  trade-offs.
 - **Anchor's `anchor test`:** spins up a local validator and runs TypeScript
   tests against it. End-to-end, slower, but closest to production behavior.
 - **Local validator (`solana-test-validator`):** a full local node, mostly
   used for client development and manual exploration.
-
-Recommended layering: LiteSVM (or Bankrun) for unit tests of every
-instruction, plus a small `anchor test` end-to-end suite for the critical
-flows.
 
 ### Tooling map
 
@@ -757,40 +740,6 @@ cheat sheet. Same content as the inline tables above, gathered for reference.
 | `approve` | Token::approve | Sets delegate + `delegated_amount`. |
 | ERC-721 / ERC-1155 | Token-2022 NFTs or Compressed NFTs (cNFTs) | Multiple standards. |
 | `delegatecall` | No direct analog | Use CPI with explicit account propagation. |
-
----
-
-## Hands-on lab
-
-A short pair-programming exercise to land the mental model. Suggested
-constraints:
-
-- **Time:** 60-75 minutes, paired (one EVM-experienced participant, one
-  Solana-curious).
-- **Starting point:** a ~80-line Solidity contract — a token-staking vault
-  that lets a user stake an ERC-20 and unstake it, with a constant reward
-  rate. The Solidity is provided.
-- **Deliverable:** the equivalent Anchor program. The participant team has to
-  decide: where does each piece of state live (PDA design), how is the
-  authority verified (Signer + `has_one`), how does the program manage the
-  staked tokens (a vault PDA owning a Token Account), and how the
-  off-chain client constructs the transaction.
-- **The instructor's checkpoints during the lab:**
-  1. Has the team decided which PDAs they need? (Should produce a list:
-     vault state PDA per user, vault token account, optionally a global
-     config PDA.)
-  2. Have they correctly mapped `msg.sender` to `Signer<'info>`?
-  3. Have they wired the Token Program CPI for the deposit and withdraw
-     flows?
-  4. Did they remember to make the vault token account's authority a PDA
-     (not the user) so the program can sign for withdraws?
-- **What to skip:** writing tests. The point is the porting exercise. Tests
-  arrive in Module 2.
-
-This lab is intentionally focused on the *translation*, not on Rust syntax
-mastery. Pair programming with an instructor present is essential — many
-participants will hit Rust borrow-checker frustration before they hit the
-conceptual point.
 
 ---
 

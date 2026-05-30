@@ -177,17 +177,9 @@ Token ACL is the interaction of three programs:
 
 See the [examples/](examples/) folder for reference code for this module.
 
-[PLACEHOLDER - Add example code to examples/]
-
-## Hands-On Exercises
-
-[PLACEHOLDER - Module 4 Exercises]
-
 ## Challenge
 
 See the [challenge/](challenge/) folder for this module's challenge.
-
-[PLACEHOLDER - Add challenge to challenge/]
 
 ## Additional Resources
 

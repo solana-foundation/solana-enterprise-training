@@ -266,17 +266,9 @@ pub struct Example<'info> {
 
 See the [examples/](examples/) folder for reference code for this module.
 
-[PLACEHOLDER - Add example code to examples/]
-
-## Hands-On Exercises
-
-[PLACEHOLDER - Module 2 Exercises]
-
 ## Challenge
 
 See the [challenge/](challenge/) folder for this module's challenge.
-
-[PLACEHOLDER - Add challenge to challenge/]
 
 ## Additional Resources
 
