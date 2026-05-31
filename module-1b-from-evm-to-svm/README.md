@@ -743,6 +743,187 @@ cheat sheet. Same content as the inline tables above, gathered for reference.
 
 ---
 
+## Quiz
+
+Test your understanding of the EVM-to-SVM mental model shift. Each question uses a realistic enterprise scenario.
+
+---
+
+### Question 1 — Mapping State to Solana
+
+Your team is porting a Solidity lending protocol to Solana. The original contract stores each user's collateral balance in a `mapping(address => uint256)`. What is the correct Solana equivalent, and how does the client interact with it?
+
+**A.** A single program account stores all balances in a serialized HashMap. The client calls the program and it looks up the user internally.
+
+**B.** One PDA per user, derived from a seed like `[b"collateral", user.key().as_ref()]`. The client derives the PDA address and includes it in the transaction's account list.
+
+**C.** The program stores balances in its own executable account's data field, similar to how a Solidity contract stores state in its bytecode account.
+
+**D.** A single token account holds all collateral, and the program tracks individual shares via instruction data.
+
+<details>
+<summary>Answer</summary>
+
+**B.** On Solana, every `mapping(K => V)` translates to a "PDA per key" pattern. Each user's collateral lives in its own account derived deterministically from a seed prefix and the user's public key. The client must derive this address and pass it in the transaction — the program never "looks up" accounts on its own. This is the most fundamental architectural difference from EVM: the caller brings the state.
+
+</details>
+
+---
+
+### Question 2 — Transaction Size and Payment Batches
+
+An enterprise payment system sends USDC to thousands of recipients per day. A developer from your Ethereum team builds the Solana integration using legacy (pre-v0) transactions and hits a wall at 5 transfers per transaction. What is the root cause, and what is the production fix?
+
+**A.** Solana transactions are limited to 5 instructions. The fix is to send more transactions in parallel.
+
+**B.** Each account in the transaction takes 32 bytes inline, and the transaction has a ~1,232-byte size cap. The fix is to use versioned (v0) transactions with Address Lookup Tables, compressing each account reference to ~1 byte.
+
+**C.** The Token Program limits transfers to 5 per call. The fix is to use a custom program that batches transfers internally.
+
+**D.** Solana's compute budget caps out at 5 transfers. The fix is to request more compute units via the Compute Budget Program.
+
+<details>
+<summary>Answer</summary>
+
+**B.** Solana transactions have a hard size cap of ~1,232 bytes. Each account in the list costs 32 bytes inline, and a token transfer touches ~5 accounts (sender ATA, receiver ATA, mint, authority, Token Program). With legacy transactions, you hit the size ceiling at 4–6 transfers. Versioned (v0) transactions with Address Lookup Tables compress account references from 32 bytes to ~1 byte each, pushing the practical ceiling to 20–30 transfers per transaction. Every production payment system should use v0 + ALTs.
+
+</details>
+
+---
+
+### Question 3 — Commitment Levels for Settlement
+
+Your compliance team asks: "When our on-chain settlement system detects a confirmed payment, it triggers a fiat payout via our banking API. Which Solana commitment level should we use before initiating the payout?"
+
+**A.** `processed` — it's the fastest and any confirmed transaction will eventually finalize.
+
+**B.** `confirmed` — supermajority-voted, negligible reorg risk, and good enough for financial operations.
+
+**C.** `finalized` — the payout is irreversible off-chain, so the on-chain trigger must also be irreversible.
+
+**D.** No commitment level is needed; once a transaction is submitted it is guaranteed to land.
+
+<details>
+<summary>Answer</summary>
+
+**C.** When an on-chain event triggers an irreversible off-chain action (fiat payout, goods release, ledger entry), you must wait for `finalized` commitment (~12–13 seconds). A `confirmed` transaction has negligible reorg risk in practice, but "negligible" is not "zero" — and reversing a fiat wire is not an option. The rule: if you can't undo the off-chain consequence, don't act until finalization.
+
+</details>
+
+---
+
+### Question 4 — Account Security
+
+During a security review of your Solana program, an auditor flags an instruction that accepts a `vault` account as raw `AccountInfo` instead of Anchor's typed `Account<'info, Vault>`. The program reads the vault's balance from the account data and authorizes a withdrawal. What class of vulnerability does this introduce?
+
+**A.** Reentrancy — the attacker can re-enter the program during the withdrawal CPI.
+
+**B.** Account ownership and discriminator confusion — an attacker can pass any account they control (including one with fabricated data), and without ownership checks or discriminator validation, the program will read attacker-controlled bytes as a valid Vault.
+
+**C.** Integer overflow — raw AccountInfo does not enforce numeric type safety.
+
+**D.** Front-running — without Anchor types, transactions are visible in the mempool and can be sandwiched.
+
+<details>
+<summary>Answer</summary>
+
+**B.** Anchor's typed wrappers (`Account<'info, Vault>`) automatically verify two things: that the account is owned by the expected program, and that its discriminator matches the `Vault` type. Raw `AccountInfo` skips both checks. An attacker can pass an account they own with carefully crafted data that, when read as a Vault struct, shows an inflated balance — authorizing a fraudulent withdrawal. Reentrancy (A) is structurally impossible on Solana. Solana has no mempool (D), so traditional front-running doesn't apply in the EVM sense.
+
+</details>
+
+---
+
+### Question 5 — Token Account Creation
+
+Your team's Solana program needs to transfer SPL tokens from a PDA-controlled vault to a user's wallet. A developer writes the CPI call but forgets to create the user's Associated Token Account (ATA) before the transfer. What happens, and how should this be handled in production?
+
+**A.** The Token Program automatically creates the ATA if it doesn't exist, deducting rent from the fee payer.
+
+**B.** The transfer silently succeeds and the tokens are held by the Token Program until the ATA is created.
+
+**C.** The transaction fails. The correct approach is to include an ATA creation instruction (via the Associated Token Program) before the transfer, or use a create-if-needed helper, with the sender or fee payer covering the rent.
+
+**D.** The tokens are sent to the user's system account (wallet address) directly, bypassing the need for an ATA.
+
+<details>
+<summary>Answer</summary>
+
+**C.** Solana wallets don't hold tokens directly — tokens live in Associated Token Accounts. If the recipient's ATA doesn't exist, the Token Program transfer will fail. The standard production pattern is to include a `create_associated_token_account` instruction (or an idempotent create-if-needed variant) in the same transaction, before the transfer instruction. The fee payer or sender covers the ATA's rent-exemption cost. This is one of the most common mistakes EVM developers make when porting token logic to Solana.
+
+</details>
+
+---
+
+### Question 6 — Local Fee Markets
+
+During a period of heavy DEX activity on Solana, your enterprise payment program's
+transactions are confirming slowly. A teammate suggests sharply increasing the priority
+fee, sized to how busy the network looks overall. A more experienced engineer pushes back
+and says to estimate the fee differently. What's the reasoning?
+
+**A.** Priority fees are fixed by the protocol and can't be set per transaction, so raising
+them won't help.
+
+**B.** A transaction's priority fee is a bid (`price × requested CU limit`), and congestion
+is localized to each writable account's per-block CU budget. Hot DEX accounts force the
+transactions competing for *those* accounts to bid up — but that says nothing about your
+payment program's unrelated accounts. Size the fee against your transaction's own writable
+set, not global network load.
+
+**C.** Priority fees are burned rather than paid to the validator, so increasing them
+doesn't change transaction ordering.
+
+**D.** The Compute Budget Program caps the priority fee per transaction, so anything above
+the threshold is ignored.
+
+<details>
+<summary>Answer</summary>
+
+**B.** Solana has no per-account fee *pricing* — the priority fee is just your bid,
+`fee = price × requested CU limit`, with the base fee flat at 5,000 lamports/signature.
+What localizes congestion is that each writable account has a fixed per-block CU budget
+(currently 12M CU), and the leader's scheduler packs transactions by reward-to-cost ratio.
+So when DEX pool accounts are saturated, the transactions write-locking *those* accounts
+must bid higher to land, while a transaction touching only cold accounts has its own
+block-space slack and can land near the floor. Bidding off global activity overpays for
+contention you aren't subject to. Estimate against your transaction's actual writable
+accounts — using the native `getRecentPrioritizationFees` (which accepts an account list)
+or a provider estimator like Helius, Triton, or QuickNode — and keep the CU limit tight,
+since the fee scales with the limit you *request*, not the compute you *use*.
+
+**Caveat worth probing:** if your transactions touch only cold accounts, they shouldn't be
+slow — so the first move is to *diagnose*, not assume. Two usual culprits: (1) a shared hot
+account hiding in your writable set — a global config PDA, a shared fee vault, or a
+transfer-hook program that write-locks shared state on every transfer — which quietly drops
+you into someone else's local market; or (2) the block hitting its *global* CU ceiling,
+where even cold-account transactions compete for raw inclusion. Account-aware estimation
+fixes (1); (2) is the one case where overall network load legitimately matters.
+
+</details>
+
+---
+
+### Question 7 — CPI Account Propagation
+
+Your team is designing a Solana program where Program A calls Program B via CPI, and Program B needs to read from three additional accounts. An EVM developer on the team assumes Program B will fetch these accounts internally, just like a Solidity contract would via `SLOAD`. Why is this assumption wrong, and what does this mean for the original transaction?
+
+**A.** Program B can fetch any account via a syscall, but it's slower than passing them directly, so it's a performance optimization to include them.
+
+**B.** Solana programs cannot access any account that isn't in the transaction's account list. All three accounts must be included in the original transaction by the client, and Program A must forward them to Program B in the CPI. The transaction declares a complete, precomputed call graph.
+
+**C.** Program B can read accounts freely, but can only write to accounts in the transaction list. The three accounts only need to be included if they're writable.
+
+**D.** Program B can access any account on-chain, but the runtime charges extra compute units for accounts not in the transaction list.
+
+<details>
+<summary>Answer</summary>
+
+**B.** This is the core composability difference between EVM and SVM. On Ethereum, a contract can call any other contract and that contract fetches whatever state it needs internally. On Solana, every account any program in the call chain will touch must be listed in the original transaction. The client must precompute the entire account graph. Program A passes these accounts forward to Program B via the CPI. This constraint enables Solana's parallel execution (Sealevel) — the runtime knows every read and write before execution begins — but it requires more upfront work from the client and careful use of `remaining_accounts` for dynamic CPI patterns like DEX aggregators.
+
+</details>
+
+---
+
 ## Additional resources
 
 - [Solana Cookbook — for EVM developers](https://solanacookbook.com/) — Pattern reference; pair with this module.

@@ -195,9 +195,91 @@ Solana's fee model differs significantly from Ethereum's global gas auction. On 
 
 ## Quiz
 
-See the [examples/](examples/) folder for reference code for this module.
+### Question 1 — Where State Lives
 
-[PLACEHOLDER - Add example code to examples/]
+If programs are stateless, where does your program state live?
+
+<details>
+<summary>Answer</summary>
+
+In separate **accounts that the program owns**. Solana separates code from state: the
+program's executable bytecode sits in its (executable) program account, but everything
+mutable — balances, config, user records — lives in the `data` field of *other* accounts.
+A program can only write to accounts it owns. Program-controlled state is typically held in
+**PDAs** (deterministically derived, no external keypair); user-owned state lives in
+accounts the user created and assigned to the program. Lamports deposited for
+rent-exemption keep those accounts alive.
+
+</details>
+
+### Question 2 — Parallel Execution
+
+Two transactions arrive at the leader trying to send SOL but from different senders to
+different receivers. How will they be executed?
+
+<details>
+<summary>Answer</summary>
+
+**In parallel.** The two transactions write-lock disjoint account sets — sender₁/receiver₁
+vs sender₂/receiver₂, all four distinct — so they don't conflict, and Solana's runtime
+(Sealevel) schedules non-overlapping transactions across threads concurrently. Parallelism
+is determined entirely by *write-lock* overlap: had they shared a writable account (the same
+sender, or a common receiver), they'd be serialized instead. Read-only accounts can be
+shared by many transactions without forcing serialization.
+
+</details>
+
+### Question 3 — PDA Signing
+
+A PDA has no private key. So how can a program sign on its behalf?
+
+<details>
+<summary>Answer</summary>
+
+Via **`invoke_signed`**, not a keypair. A PDA is deliberately derived to fall *off* the
+ed25519 curve, so no private key exists for it. When a program makes a CPI, it passes the
+PDA's seeds + bump as `signer_seeds`. The runtime re-derives the address from those seeds
+and the **calling program's ID**; if it matches the account being used as a signer, the
+runtime grants the signature. So the "signature" is authority bound to the program ID — only
+the program whose ID produces that PDA can sign for it — not a cryptographic signature.
+
+</details>
+
+### Question 4 — PDA Namespacing
+
+You deploy a program that creates a PDA seeded by `[b"vault", user.key()]`. Another
+developer deploys a different program and tries to derive the same PDA with the same seeds.
+Do they collide?
+
+<details>
+<summary>Answer</summary>
+
+**No.** The program ID is part of the derivation input
+(`find_program_address(seeds, program_id)`), so identical seeds under two different program
+IDs produce two different addresses — each program gets its own PDA namespace. Even if the
+other developer *hardcodes* your program's ID to derive the same address, they still can't
+sign for it: `invoke_signed` checks the *calling* program's ID, so only your program can
+produce that signature, and the account is owned by whoever created it. Same seeds,
+different program → no collision in any meaningful sense.
+
+</details>
+
+### Question 5 — Transaction Atomicity
+
+You write a transaction with three instructions: A, B, C. Instruction B fails. What happens
+to A and C? What happens to the base fee paid?
+
+<details>
+<summary>Answer</summary>
+
+Solana transactions are **atomic**, so the whole thing fails as a unit: B's failure aborts
+execution, **C never runs**, and **A's effects are rolled back** — net zero state change.
+But the **fee payer is still charged**. A transaction that fails *during execution* (as
+opposed to being rejected pre-flight for an invalid blockhash, bad signature, or unfunded
+fee payer) is still included in a block and still pays the base fee (5,000 lamports per
+signature) plus any priority fee, because it consumed validator resources. Failed ≠ free.
+
+</details>
 
 ## Additional Resources
 
