@@ -2,22 +2,34 @@
 
 ## Learning Objectives
 
-- Explain Rust's ownership, borrowing, and reference model and why it matters for Solana development
-- Work with Rust structs to represent on-chain account state
-- Describe what the Anchor framework solves and how it simplifies Solana program development
-- Use the Anchor CLI to create, build, test, and deploy programs
-- Write Anchor account structs with appropriate constraints for validation, initialization, and PDA derivation
-- Build and test a basic Solana program using Anchor
+- Understand Rust's ownership model and how it prevents memory bugs at compile time
+- Explain references, borrowing, and Rust's immutable-by-default philosophy
+- Define and work with Rust structs, including Anchor's `#[account]` macro and discriminators
+- Set up and use the Anchor CLI for Solana development
+- Describe the Anchor `Context` and `#[derive(Accounts)]` macro
+- Apply Anchor account constraints (Signer, mut, init, has_one, address, seeds + bump)
+- Understand Cross-Program Invocations (CPIs) and how programs compose on Solana
+- Build a working Lamports Vault program with Anchor
+- Write tests for Solana programs
 
 ## Topics Covered
 
-- Rust ownership and borrowing rules
-- References and immutability
-- Structs and data representation
-- Introduction to the Anchor framework
-- Anchor CLI and workspace management
-- Anchor Context and `#[derive(Accounts)]`
-- Account constraints: signer, mut, init, init_if_needed, has_one, address, seeds
+- Ownership and Ownership Rules
+- References and Borrowing
+- Immutable by Default
+- Structs
+- Why Anchor
+- Anchor CLI
+- Lifetimes and `'info`
+- Anchor Context
+- `#[derive(Accounts)]`
+- Account Constraints: Signer and mut
+- Account Constraints: init and init_if_needed
+- Account Constraints: has_one and address
+- Account Constraints: seeds + bump
+- Cross-Program Invocations (CPIs)
+- Live Coding: Lamports Vault
+- Challenge: Per-Transaction Withdrawal Limit
 
 ## Slides
 
@@ -66,16 +78,23 @@ my_number += 1;
 
 ### Structs
 
-Structs are one of the primary ways data is organized in Rust. They allow developers to create custom types and are the main way that on-chain account state is represented in Solana programs.
+Structs are one of the primary ways data is organized in Rust. They let you define your own typed records and are the primary way to represent account state data in Anchor.
+
+In Anchor, every account's state lives in a `#[account]`-annotated struct. Anchor prepends every account with an **8-byte discriminator** — a tag derived from hashing the account name. This prevents a program from accidentally reading account A as type B.
 
 ```rust
+#[account]
 pub struct Vault {
-    owner: Pubkey,
-    auth_bump: u8,
-    vault_bump: u8,
-    score: u8,
+    pub owner: Pubkey,
+    pub balance: u64,
+    pub bump: u8,
 }
+
+// space = 8 + 32 + 8 + 1
+//         disc owner bal bump
 ```
+
+Anchor can also calculate account space automatically using `Vault::INIT_SPACE`.
 
 ---
 
@@ -111,26 +130,36 @@ Anchor removes Solana's most error-prone low-level boilerplate:
 
 ## 3. Anchor CLI
 
-The Anchor CLI provides commands for creating and managing Solana programs.
-
 ```
-Usage: anchor <command>
+anchor init <name>          Scaffold a new workspace + program
+anchor build                Compile programs to SBPF
+anchor test                 Run tests against a local validator
+anchor deploy               Deploy to the configured cluster
+anchor idl init             Upload IDL to on-chain account
+avm use <version>           Switch Anchor versions per project
 ```
 
-| Command | Description |
-|---------|-------------|
-| `anchor init <program-name>` | Create a new workspace with a program |
-| `anchor build` | Build all programs in the workspace |
-| `anchor build <program-name>` | Build a specific program |
-| `anchor test` | Run tests |
-| `anchor deploy` | Deploy all programs |
-| `anchor deploy <program-name>` | Deploy a specific program |
-
-Use `anchor --help` for the full list of available commands. Appending `--help` after any command provides additional information about that command.
+Run `anchor --help` for the full list. AVM (Anchor Version Manager) lets you switch between Anchor versions easily per project.
 
 ---
 
-## 4. Anchor Context
+## 4. Lifetimes and `'info`
+
+Rust lifetimes tell the compiler how long a reference is valid. You will see `'info` on almost every Anchor struct — it means "these references live as long as the transaction's account info data."
+
+```rust
+pub struct Initialize<'info> {
+    #[account(mut)]
+    pub user: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+```
+
+You do not need to deeply understand lifetimes to use Anchor. The key takeaway: `'info` ties every account reference to the same underlying data that the runtime passes into your program. Anchor handles the rest. When you see `<'info>`, read it as "borrowed from the runtime for the duration of this instruction."
+
+---
+
+## 5. Anchor Context
 
 Every Anchor instruction takes a `Context<T>`, where `T` is the validated accounts struct. By the time execution reaches your business logic, all accounts have been verified and are ready to use.
 
@@ -149,124 +178,155 @@ pub fn initialize(ctx: Context<Initialize>, ...) -> Result<()> {
 
 ---
 
-## 5. #[derive(Accounts)]
+## 6. `#[derive(Accounts)]`
 
-The `#[derive(Accounts)]` macro implements a deserializer on a given struct, allowing Anchor to automatically validate all accounts before your instruction logic runs.
+The `#[derive(Accounts)]` macro implements a deserializer on a given struct, allowing Anchor to automatically validate all accounts before your instruction logic runs. Without Anchor, you would have to manipulate raw byte arrays and deserialize them manually.
 
 **Key macros:**
-- `#[account]` - Marks a data structure as a Solana account
-- `#[instruction]` - Provides access to instruction arguments inside account constraints
+- `#[account]` — A macro for a data structure representing a Solana account. Enables account constraints.
+- `#[instruction]` — Allows you to access instruction arguments inside account constraints.
 
 ---
 
-## 6. Account Constraints
+## 7. Account Constraints: Signer and mut
 
-Account constraints are the core of Anchor's validation system. They declaratively specify the requirements that each account must satisfy.
+**`Signer<'info>`** — Validates that the account has signed the transaction. Prefer `Signer<'info>` type over a bare `#[account(signer)]` constraint.
 
-### Signer
-
-The `signer` constraint checks that a given account has signed the transaction.
-
-```rust
-#[account(signer)]
-pub authority: AccountInfo<'info>,
-
-#[account(signer @ MyError::MyErrorCode)]
-pub payer: AccountInfo<'info>,
-
-// Or use the Signer type directly
-pub payer: Signer<'info>,
-```
-
-### Mutable (mut)
-
-The `mut` constraint checks that the account is mutable (writable).
-
-```rust
-#[account(mut)]
-pub data_account: Account<'info, MyData>,
-
-#[account(mut @ MyError::MyErrorCode)]
-pub data_account_two: Account<'info, MyData>,
-```
-
-### Init
-
-The `init` constraint creates an account via the System Program, marks it as mutable, and makes it rent-exempt. It must be used with the `payer` constraint.
+**`#[account(mut)]`** — Marks the account as writable in this transaction. Required for anything Anchor will modify (lamports, data, owner). Forgetting `mut` on an account you write to is the most common Anchor error: "account is not mutable."
 
 ```rust
 #[derive(Accounts)]
-pub struct Initialize<'info> {
-    #[account(init, payer = payer, space = 8 + 8)]
-    pub data_account: Account<'info, MyData>,
+pub struct Deposit<'info> {
+    #[account(mut)]
+    pub user: Signer<'info>,
 
     #[account(mut)]
-    pub payer: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-```
-
-### Init If Needed
-
-The `init_if_needed` constraint provides the same functionality as `init`, but only initializes the account if it does not already exist. If the account already exists, the normal validation checks are still performed.
-
-```rust
-#[account(init_if_needed, payer = payer, space = 8 + 8)]
-pub data_account: Account<'info, MyData>,
-```
-
-### Has One
-
-The `has_one` constraint checks that a field in the account data matches the key of another account in the instruction.
-
-```rust
-#[account(mut, has_one = authority)]
-pub data_account: Account<'info, MyData>,
-
-pub authority: Signer<'info>,
-```
-
-### Address
-
-The `address` constraint checks that the account's key matches a specific public key.
-
-```rust
-#[account(address = crate::ID)]
-pub data_account: Account<'info, MyData>,
-
-#[account(address = crate::ID @ MyError::MyErrorCode)]
-pub other_account: AccountInfo<'info>,
-```
-
-### Seeds (PDA Validation)
-
-The `seeds` constraint validates that an account's key matches a PDA derived from the specified seeds. It can also validate PDAs of other programs.
-
-```rust
-#[derive(Accounts)]
-#[instruction(bump: u8)]
-pub struct Example<'info> {
-    #[account(seeds = [b"my_seed"], bump)]
-    pub my_pda: AccountInfo<'info>,
-
-    // PDA from another program
-    #[account(
-        seeds = [b"other_seed"],
-        bump,
-        seeds::program = other_program.key()
-    )]
-    pub pda_of_another_program: AccountInfo<'info>,
+    pub vault: Account<'info, Vault>,
 }
 ```
 
 ---
 
-## Code Example
+## 8. Account Constraints: init and init_if_needed
 
-See the [examples/](examples/) folder for reference code for this module.
+**`init`** does four things in one constraint: creates the account via the System Program, marks it as mutable, allocates the specified space, and pays rent-exemption from the payer.
 
-## Challenge
+```rust
+#[account(
+    init,
+    payer = payer,
+    space = 8 + Vault::INIT_SPACE
+)]
+pub vault: Account<'info, Vault>,
+
+#[account(mut)]
+pub payer: Signer<'info>,
+pub system_program: Program<'info, System>,
+```
+
+Since the payer will have SOL deducted to pay for rent-exemption, they must be a signer. And since we are initializing an account, the System Program must be included.
+
+**`init_if_needed`** — Same as `init`, but only creates the account if it does not already exist. If it does exist, it runs the same validation checks. Requires the `init-if-needed` feature flag in `Cargo.toml`. Useful for Associated Token Accounts — if the ATA is not initialized, it will create it; otherwise it does nothing.
+
+**Caveat:** Avoid using `init_if_needed` on your own program accounts. Anchor will allow re-initialization of any account owned by the System Program or with 0 lamports, which could reset the account to its initial value.
+
+---
+
+## 9. Account Constraints: has_one and address
+
+**`has_one = field`** — Checks that a field on this account matches the key of another account in the same struct. Use case: `vault.owner == signer.key()`.
+
+**`address = key`** — Checks that the account's pubkey matches a hardcoded value. Use case: pinning a specific admin or treasury.
+
+```rust
+// owner field must match signer
+#[account(
+    mut,
+    has_one = owner
+)]
+pub vault: Account<'info, Vault>,
+pub owner: Signer<'info>,
+
+// pinned admin pubkey
+#[account(address = ADMIN)]
+pub admin: Signer<'info>,
+```
+
+---
+
+## 10. Account Constraints: seeds + bump
+
+Tells Anchor that this account is a PDA derived from the specified seeds and bump.
+
+- **`bump = vault.bump`** — Use the canonical bump stored on the account (cheap, safe).
+- **`bump` (no value)** — Anchor finds it for you — costs CUs on every call.
+- **`seeds::program = other.key()`** — Validate a PDA derived under another program's ID.
+
+```rust
+#[derive(Accounts)]
+pub struct Withdraw<'info> {
+    #[account(
+        mut,
+        seeds = [b"vault",
+                 user.key().as_ref()],
+        bump = vault.bump
+    )]
+    pub vault: Account<'info, Vault>,
+}
+```
+
+When used with `init`, Anchor calculates the canonical bump automatically. The canonical bump is the first bump (starting from 255, decrementing) that throws the address off the ed25519 curve.
+
+---
+
+## 11. Cross-Program Invocations (CPIs)
+
+A Cross-Program Invocation is when one program calls another program's instruction during execution. This is how programs compose on Solana — your program can invoke the System Program to transfer SOL, invoke the Token Program to transfer tokens, or call any other deployed program.
+
+**How it works:** Your program builds an instruction (program ID, accounts, data) and calls `invoke` or `invoke_signed`. The runtime then executes the target program with the accounts you passed. `invoke_signed` is used when your program needs to sign on behalf of a PDA it owns.
+
+```rust
+let cpi_accounts = Transfer {
+    from: ctx.accounts.user.to_account_info(),
+    to: ctx.accounts.vault.to_account_info(),
+};
+
+CpiContext::new(cpi_program, cpi_accounts);
+```
+
+For PDA-signed CPIs (e.g., withdrawing from a vault PDA), use `CpiContext::new_with_signer` with the PDA seeds.
+
+**Key rules:**
+- The calling program must pass all accounts the target program needs
+- PDA signing via `invoke_signed` only works if the PDA was derived from the calling program's ID
+- CPI depth is limited
+- Indirect re-entrancy is blocked — Program A cannot be called back by a program it invoked
+
+---
+
+## 12. Live Coding: Lamports Vault
+
+Build a PDA-backed vault where each user gets their own vault, derived from their pubkey.
+
+**Instructions:**
+- **initialize** — Create a vault PDA for the user.
+- **deposit** — Transfer lamports from user to vault PDA.
+- **withdraw** — Transfer lamports from vault to user.
+- **close** — Drain remaining lamports back to owner. Reclaim rent.
+
+See the [examples/](examples/) folder for reference code.
+
+---
+
+## 13. Challenge: Per-Transaction Withdrawal Limit
+
+Extend the vault to enforce a maximum withdrawal amount per transaction.
+
+**Requirements:**
+- Add a `max_withdraw: u64` field to the Vault state
+- Set it in `initialize`
+- In `withdraw`, reject any amount that exceeds `max_withdraw` with a custom error
+- Write tests: a valid withdrawal, a withdrawal exactly at the limit, and a withdrawal over the limit (must fail)
 
 See the [challenge/](challenge/) folder for this module's challenge.
 
