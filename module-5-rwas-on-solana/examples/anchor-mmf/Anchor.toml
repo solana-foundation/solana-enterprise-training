@@ -1,0 +1,19 @@
+[toolchain]
+package_manager = "yarn"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+mmf_admin = "3Aenr8ahixrmMdGhivPQWwo4dZQqFSucSiW2ivUFb27e"
+mmf_transfer_hook = "FPX37yHKMHXsJyYUgsjSrXts5ndGsS6pADM2Eok13LeX"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "cargo test"
+
+[hooks]

@@ -100,9 +100,9 @@ One of the most powerful aspects of tokenizing assets on a public blockchain is 
 
 ---
 
-## Hands-On Exercises
+## Code Example
 
-[PLACEHOLDER - Module 5 Exercises]
+See the [examples/](examples/) folder for reference code for this module.
 
 ## Additional Resources
 

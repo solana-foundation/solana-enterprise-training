@@ -1,0 +1,42 @@
+[package]
+name = "mmf-admin"
+version = "0.1.0"
+description = "MMF Admin program - issuer of the MMF Token-2022 mint: holds config, roles, timelock, and mint/burn/pause/force actions. Compliance gating is the external sRFC-37 Token ACL."
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "mmf_admin"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+
+[dependencies]
+anchor-lang = { version = "1.0.0", features = ["init-if-needed"] }
+anchor-spl  = "1.0.0"
+
+[dev-dependencies]
+litesvm = "0.10.0"
+solana-message = "3.0.1"
+solana-transaction = "3.0.2"
+solana-signer = "3.0.0"
+solana-keypair = "3.0.1"
+solana-instruction = "3.0"
+solana-account = "3.2"
+# `curve25519` enables off-chain `Address::find_program_address`. This is the
+# same `Address` type litesvm exposes, so no pubkey conversions are needed.
+solana-address = { version = "2.6", features = ["curve25519"] }
+sha2 = "0.10"
+
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
