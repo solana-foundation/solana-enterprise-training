@@ -41,7 +41,7 @@ Traditional blockchains like Ethereum process transactions sequentially - each m
 
 Solana separates ordering from execution. Proof of History (PoH) creates a cryptographic clock that proves the ordering of events mathematically, eliminating the need for validators to negotiate sequence. This enables parallel execution of non-conflicting transactions across multiple cores.
 
-**The result:** 5,000+ TPS, 400ms block times, and fees below $0.001.
+**The result:** ~3,000+ TPS, 400ms block times, and fees below $0.001.
 
 ## 3. Solana Architecture
 
@@ -56,6 +56,22 @@ Solana's architecture is composed of several interconnected components that work
 **Block Verification.** Each validator reassembles the block from Turbine chunks, re-executes the transactions independently, and checks that the resulting state matches what the leader claimed. If anything does not match, the block is rejected.
 
 **Consensus - Tower BFT.** Solana uses Tower BFT, a PoH-aware variant of PBFT. Validators cast votes on blocks by locking their stake behind them. The longer a validator has been voting on a particular fork, the longer its lockout period before it can switch. This makes it economically irrational to flip to a different fork late in the process.
+
+### Transaction Lifecycle
+
+This diagram traces a single transaction through the components above - from the user's action in an application all the way to a committed block. It is the same path section 8 summarizes from the client's point of view, shown here end to end.
+
+```mermaid
+flowchart TD
+    U["User action in an app"] --> RPC["RPC client builds<br/>and submits the transaction"]
+    RPC --> GS["<b>Gulf Stream</b><br/>Forwarded directly to the<br/>upcoming leader - no mempool"]
+    GS --> LE["<b>Leader: block building</b><br/>Dedup, then Sealevel runs<br/>non-conflicting txs in parallel"]
+    LE --> POH["Results woven into the<br/><b>Proof of History</b> chain"]
+    POH --> TB["<b>Turbine</b><br/>Block split into packets, propagated<br/>through a layered validator tree"]
+    TB --> VV["<b>Verification</b><br/>Validators reassemble and<br/>re-execute to confirm the state"]
+    VV --> CB["<b>Consensus: Tower BFT</b><br/>Stake-weighted votes with<br/>lockouts commit the block"]
+    CB --> FIN(["Block confirmed<br/>state is committed"])
+```
 
 ## 4. Key Differences from EVM
 
@@ -120,20 +136,42 @@ Programs are managed by the BPF Loader. The latest version is the Upgradeable BP
 
 **Native Programs** (such as the System Program and SPL Token Program) are provided by Solana. **User Programs** are written and deployed by developers.
 
+### Program and Account Ownership
+
+This is the separation that most surprises EVM developers: the program (code) and its state (data) live in *different* accounts. A program is stateless bytecode; every piece of mutable state sits in a separate account that the program owns. A program can write only to accounts it owns, and it can sign for the PDAs it derived. Everyone else gets read-only access.
+
+```mermaid
+flowchart TD
+    SYS["<b>System Program</b><br/>creates accounts and<br/>assigns their owner"]
+    SYS -. "assigns ownership" .-> PROG
+    PROG["<b>Program account</b><br/>is_executable = true<br/>holds BPF bytecode - stateless"]
+    PROG -- "owns + can write" --> C["<b>Config PDA</b><br/>seeds: [config]<br/>data: admin, settings"]
+    PROG -- "owns + can write" --> R["<b>User record PDA</b><br/>seeds: [user, wallet]<br/>data: balance, points"]
+    PROG -- "owns + can write" --> V["<b>Vault PDA</b><br/>holds lamports / tokens"]
+    EXT["Another program"] -. "reads only - cannot write" .-> C
+```
+
 ## 7. Rent
 
-Data storage on Solana requires a rent deposit. When an account is created, rent must be paid based on the amount of space allocated.
+"Rent" is the deposit an account holds to cover the cost of storing its data on-chain. When an account is created, this deposit is set based on the amount of space allocated.
 
-- Pay 2 years of rent upfront to achieve **rent-exemption** (required on account creation)
-- **Closing** an account allows the rent deposit to be reclaimed
-- **Resizing** an account costs or returns the difference in rent
-- **Upgradable programs** require 4 years of rent upfront to ensure sufficient reserves for future upgrades
+- **Rent must be paid to create an account** — based on the space it allocates
+- **Pay 2 years' worth upfront** to make the account **rent-exempt**
+- **All new accounts must be rent-exempt** — this is required at account creation
+- **Closing** an account lets the full deposit be reclaimed
+- **Resizing** an account costs or returns the difference
+- **Upgradable programs** allocate **double the size of the program bytecode** in their ProgramData account, leaving headroom for future upgrades — so the deposit is sized for that larger allocation
+
+> [!IMPORTANT]
+> **"Rent" is a refundable deposit, not a fee — you are never actually charged this amount.** The lamports sit in the account's own balance and are returned in full when the account is closed. The "2 years" figure is only how the rent-exempt threshold is *calculated*; it is not a recurring cost. The legacy mechanism that once periodically collected rent from non-exempt accounts has been retired, so today every account is simply rent-exempt from creation and never debited.
 
 ## 8. Transactions
 
 Transactions are the mechanism for calling methods on Solana programs. They are submitted through an RPC provider and must include all accounts that the transaction will reference.
 
 A transaction is made up of one or more **instructions**. Instructions are the interface to Solana programs - each targets a specific program ID and a specific method. Transactions are **atomic**: if any instruction fails, the entire transaction is reverted and no state change occurs (transaction fees are still charged).
+
+EVM has no native transaction-level batching (a transaction hits one entry point) so you either route through an aggregator/multicall contract (mostly reads) or use account abstraction (4337 bundlers / 7702) for user-authenticated writes.
 
 **Transaction Structure:**
 
