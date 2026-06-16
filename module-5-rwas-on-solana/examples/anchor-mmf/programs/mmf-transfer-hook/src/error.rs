@@ -6,6 +6,8 @@ pub enum HookError {
     NotTransferring,
     #[msg("Transfer would exceed the per-window rate limit for this owner")]
     RateLimitExceeded,
+    #[msg("Rate-limit account does not exist - the owner was not onboarded")]
+    RateLimitMissing,
     #[msg("Provided mint is not a Token-2022 mint")]
     InvalidMint,
     #[msg("Signer is not the rate-limit config authority")]

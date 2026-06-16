@@ -1,7 +1,12 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program::invoke;
 use anchor_lang::system_program::{create_account, CreateAccount};
 use anchor_spl::{
-    token_2022::spl_token_2022::{extension::ExtensionType, state::AccountState, state::Mint as MintState},
+    token_2022::spl_token_2022::{
+        extension::{pausable::instruction as pausable_instruction, ExtensionType},
+        state::AccountState,
+        state::Mint as MintState,
+    },
     token_interface::{
         default_account_state_initialize, initialize_mint2, permanent_delegate_initialize,
         transfer_hook_initialize, DefaultAccountStateInitialize, InitializeMint2,
@@ -10,8 +15,8 @@ use anchor_spl::{
 };
 
 use crate::{
-    constants::{ANCHOR_DISCRIMINATOR_SIZE, CONFIG_SEED, MMF_DECIMALS},
-    state::Config,
+    constants::{ANCHOR_DISCRIMINATOR_SIZE, CONFIG_SEED, MMF_DECIMALS, ROLE_SEED},
+    state::{Config, Role, ROLE_EMERGENCY},
 };
 
 /// One-time bootstrap: creates the singleton `Config` PDA and the MMF
@@ -62,6 +67,10 @@ pub struct Initialize<'info> {
     ///     created frozen. A holder can only transact once their account is
     ///     thawed. This moves compliance gating off the transfer hook (now
     ///     rate-limit-only) and onto Token-2022 itself.
+    ///   * Pausable - a protocol-level circuit breaker. While paused,
+    ///     Token-2022 itself rejects every transfer, mint, and burn of this
+    ///     mint (including permanent-delegate moves). The pause authority is
+    ///     the Config PDA, so only `set_paused` can flip it.
     ///
     /// Freeze authority is set to `admin` rather than the Config PDA on
     /// purpose: gating is handled by the sRFC-37 Token ACL standard
@@ -75,6 +84,21 @@ pub struct Initialize<'info> {
     /// CHECK: initialized as a Token-2022 mint in the handler.
     #[account(mut)]
     pub mint: Signer<'info>,
+
+    /// Genesis role grant: the deployer receives `ROLE_EMERGENCY`. This is the
+    /// one role that bootstraps the rest - `set_role`'s emergency path lets an
+    /// `ROLE_EMERGENCY` holder grant every other role without a pre-existing
+    /// timelock. Without it a fresh deployment could never grant its first
+    /// role. It is the Solana analogue of the EVM Diamond's owner/`diamondCut`
+    /// root authority and, like that, should be a multisig in production.
+    #[account(
+        init,
+        payer = admin,
+        space = ANCHOR_DISCRIMINATOR_SIZE + Role::INIT_SPACE,
+        seeds = [ROLE_SEED, ROLE_EMERGENCY.as_ref(), admin.key().as_ref()],
+        bump,
+    )]
+    pub admin_role: Account<'info, Role>,
 
     /// CHECK: the sibling hook program. Only its address is read, we never
     /// CPI into it from here - Token-2022 does that on every transfer.
@@ -93,13 +117,14 @@ pub fn handler(ctx: Context<Initialize>) -> Result<()> {
     let token_program_ai = ctx.accounts.token_program.to_account_info();
     let mint_ai = ctx.accounts.mint.to_account_info();
 
-    // 1. Allocate the mint account with room for all three extensions. The
+    // 1. Allocate the mint account with room for all four extensions. The
     //    length must account for every extension up front - you cannot grow a
     //    mint to add an extension after `initialize_mint2`.
     let space = ExtensionType::try_calculate_account_len::<MintState>(&[
         ExtensionType::TransferHook,
         ExtensionType::PermanentDelegate,
         ExtensionType::DefaultAccountState,
+        ExtensionType::Pausable,
     ])?;
     let lamports = Rent::get()?.minimum_balance(space);
 
@@ -152,6 +177,15 @@ pub fn handler(ctx: Context<Initialize>) -> Result<()> {
         &AccountState::Frozen,
     )?;
 
+    // Pausable has no anchor-spl wrapper, so build the raw instruction. Pause
+    // authority is the Config PDA. No signer is needed here: the extension is
+    // initialized on the not-yet-initialized mint (the mint keypair already
+    // signs the transaction for the account creation above).
+    invoke(
+        &pausable_instruction::initialize(&token_program_id, &mint_ai.key(), &config_key)?,
+        &[token_program_ai.clone(), mint_ai.clone()],
+    )?;
+
     // 3. Initialize the mint. Mint authority is the Config PDA so issuance
     //    (`mint_mmf` / `burn_mmf` / `force_*`) routes through this program.
     //    Freeze authority is the admin: it is handed to the Token ACL
@@ -175,6 +209,15 @@ pub fn handler(ctx: Context<Initialize>) -> Result<()> {
         paused: false,
         version: 1,
         bump: ctx.bumps.config,
+    });
+
+    // Genesis role: grant the deployer ROLE_EMERGENCY so the role system can
+    // be bootstrapped (see the `admin_role` doc above).
+    ctx.accounts.admin_role.set_inner(Role {
+        role: ROLE_EMERGENCY,
+        grantee: ctx.accounts.admin.key(),
+        granted: true,
+        bump: ctx.bumps.admin_role,
     });
 
     msg!(

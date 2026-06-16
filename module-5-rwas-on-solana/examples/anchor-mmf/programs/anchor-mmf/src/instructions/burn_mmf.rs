@@ -39,7 +39,6 @@ pub struct BurnMmf<'info> {
     #[account(
         seeds = [CONFIG_SEED],
         bump = config.bump,
-        constraint = !config.paused @ MmfError::Paused,
         has_one = mint @ MmfError::MintMismatch,
     )]
     pub config: Account<'info, Config>,

@@ -16,9 +16,11 @@ use crate::constants::{RATE_CONFIG_SEED, RATE_LIMIT_SEED};
 ///  0. `RateLimitConfig` - the per-mint cap + window (read-only).
 ///     Seeds: `["mmf-rate-config", mint]`, where `mint` is transfer
 ///     account index 1.
-///  1. `RateLimit` - the per-(mint, owner) running window (writable; the
+///  1. `RateLimit` - the per-(mint, authority) running window (writable; the
 ///     hook updates `amount_transferred`). Seeds:
-///     `["mmf-rate-limit", mint, owner]`, where `owner` is index 3.
+///     `["mmf-rate-limit", mint, authority]`, where `authority` (the transfer
+///     signer) is index 3. For a normal transfer that is the source owner;
+///     a permanent-delegate transfer is skipped before this is read.
 pub fn extra_account_metas() -> Result<Vec<ExtraAccountMeta>> {
     Ok(vec![
         // 0: RateLimitConfig PDA (read-only).
@@ -39,7 +41,7 @@ pub fn extra_account_metas() -> Result<Vec<ExtraAccountMeta>> {
                     bytes: RATE_LIMIT_SEED.to_vec(),
                 },
                 Seed::AccountKey { index: 1 }, // mint
-                Seed::AccountKey { index: 3 }, // owner
+                Seed::AccountKey { index: 3 }, // authority (transfer signer)
             ],
             false, // not a signer
             true,  // writable

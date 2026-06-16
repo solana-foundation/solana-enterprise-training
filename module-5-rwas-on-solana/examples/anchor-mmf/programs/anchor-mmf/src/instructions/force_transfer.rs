@@ -1,6 +1,8 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::instruction::AccountMeta;
+use anchor_lang::solana_program::program::invoke_signed;
 use anchor_spl::{
-    token_2022::{transfer_checked, TransferChecked},
+    token_2022::spl_token_2022::instruction::transfer_checked as spl_transfer_checked,
     token_interface::{Mint, TokenAccount, TokenInterface},
 };
 
@@ -65,6 +67,23 @@ pub struct ForceTransfer<'info> {
     pub to_ata: InterfaceAccount<'info, TokenAccount>,
 
     pub token_program: Interface<'info, TokenInterface>,
+
+    // --- Transfer-hook accounts --------------------------------------------
+    // `transfer_checked` fires the mint's transfer hook, so the hook's
+    // accounts must travel with this CPI. The hook (`mmf_transfer_hook`)
+    // detects that the authority is the permanent delegate and skips rate
+    // limiting, so a seizure is never throttled - but Token-2022 still
+    // resolves and passes these, so they must be present.
+    /// CHECK: the mint's transfer hook program; Token-2022 invokes it.
+    pub transfer_hook_program: UncheckedAccount<'info>,
+    /// CHECK: hook ExtraAccountMetaList PDA (`["extra-account-metas", mint]`).
+    pub hook_extra_account_meta_list: UncheckedAccount<'info>,
+    /// CHECK: hook per-mint RateLimitConfig PDA.
+    pub hook_rate_config: UncheckedAccount<'info>,
+    /// CHECK: hook RateLimit PDA for the permanent delegate; not read (the
+    /// hook skips delegate transfers) but Token-2022 resolves the address.
+    #[account(mut)]
+    pub hook_rate_limit: UncheckedAccount<'info>,
 }
 
 pub fn handler(ctx: Context<ForceTransfer>, amount: u64) -> Result<()> {
@@ -118,17 +137,40 @@ pub fn handler(ctx: Context<ForceTransfer>, amount: u64) -> Result<()> {
     let bump = [ctx.accounts.config.bump];
     let signer_seeds: &[&[&[u8]]] = &[&[CONFIG_SEED, &bump]];
 
-    let cpi = CpiContext::new_with_signer(
-        ctx.accounts.token_program.key(),
-        TransferChecked {
-            from: ctx.accounts.from_ata.to_account_info(),
-            mint: ctx.accounts.mint.to_account_info(),
-            to: ctx.accounts.to_ata.to_account_info(),
-            authority: ctx.accounts.config.to_account_info(),
-        },
+    // Build `transfer_checked` by hand so we can append the transfer hook's
+    // resolved accounts in the order Token-2022 expects:
+    // [rate_config, rate_limit, hook_program, extra_account_meta_list]. The
+    // anchor `transfer_checked` wrapper only emits the four base accounts, so
+    // it cannot carry the hook accounts through the CPI.
+    let mut ix = spl_transfer_checked(
+        &ctx.accounts.token_program.key(),
+        &ctx.accounts.from_ata.key(),
+        &ctx.accounts.mint.key(),
+        &ctx.accounts.to_ata.key(),
+        &ctx.accounts.config.key(),
+        &[],
+        amount,
+        ctx.accounts.mint.decimals,
+    )?;
+    ix.accounts.push(AccountMeta::new_readonly(ctx.accounts.hook_rate_config.key(), false));
+    ix.accounts.push(AccountMeta::new(ctx.accounts.hook_rate_limit.key(), false));
+    ix.accounts.push(AccountMeta::new_readonly(ctx.accounts.transfer_hook_program.key(), false));
+    ix.accounts.push(AccountMeta::new_readonly(ctx.accounts.hook_extra_account_meta_list.key(), false));
+
+    invoke_signed(
+        &ix,
+        &[
+            ctx.accounts.from_ata.to_account_info(),
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.to_ata.to_account_info(),
+            ctx.accounts.config.to_account_info(),
+            ctx.accounts.hook_rate_config.to_account_info(),
+            ctx.accounts.hook_rate_limit.to_account_info(),
+            ctx.accounts.transfer_hook_program.to_account_info(),
+            ctx.accounts.hook_extra_account_meta_list.to_account_info(),
+        ],
         signer_seeds,
-    );
-    transfer_checked(cpi, amount, ctx.accounts.mint.decimals)?;
+    )?;
 
     msg!(
         "force-transferred {} units from {} to {}",

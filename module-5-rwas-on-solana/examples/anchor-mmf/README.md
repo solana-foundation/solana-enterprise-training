@@ -33,7 +33,8 @@ Two in-workspace programs, plus two external sRFC-37 programs for gating:
                 │  MMF mint       │   Token-2022, 4 decimals
                 │  (Token-2022)   │   TransferHook → mmf_transfer_hook
                 │  default-frozen │   PermanentDelegate → Config PDA
-                └────────┬────────┘   DefaultAccountState = Frozen
+                │  + Pausable     │   DefaultAccountState = Frozen
+                └────────┬────────┘   Pausable (pause authority = Config PDA)
                          │ freeze authority delegated to
                          ▼
           ┌───────────────────────────────┐   sRFC-37 Token ACL
@@ -57,8 +58,10 @@ calls `transfer_checked` inside `force_transfer`, which triggers Token-2022 to
 invoke the transfer hook. If the hook lived inside `mmf_admin`, that would be a
 re-entrant CPI back into the running program. Keeping the hook in its own
 read-only program eliminates that surface. The hook is rate-limit-only: it caps
-how much can leave any one owner's account per rolling window, and does not read
-the pause flag or any allow list.
+how much can leave any one owner's account per window, ignores pause and the
+allow list (both enforced elsewhere - pause by the Token-2022 Pausable
+extension, gating by Token ACL), and skips permanent-delegate (force) transfers
+so a compliance seizure is never throttled.
 
 ## Mapping from an EVM Diamond
 
@@ -70,7 +73,7 @@ that exposes one address with many facets.
 | `ERC20Facet` (balances, transfers) | Token-2022 mint itself |
 | `AccessControlFacet` | `state::Role` PDAs + `set_role` ix |
 | Allow/block list compliance | external sRFC-37 Token ACL + ABL gate (default-frozen mint + gated permissionless thaw) |
-| `PauseFacet` | `Config.paused` + `set_paused` ix (gates `mint`/`burn`) |
+| `PauseFacet` | Token-2022 **Pausable** extension + `set_paused` ix (protocol-level halt of all transfer/mint/burn) |
 | `MintBurnFacet` | `mint_mmf` / `burn_mmf` ix |
 | Implicit operator authority | `force_transfer` / `force_burn` ix, backed by the mint's `PermanentDelegate` extension |
 | `diamondCut` upgradeability | BPF upgrade authority on both programs (e.g. a Squads multisig) |
@@ -83,12 +86,18 @@ against the fund's books between upgrades.
 Defined in `mmf_admin::state::role`:
 
 - `ROLE_MINTER` — can mint (subscription bridge) and burn (redemption bridge).
-- `ROLE_PAUSER` — can flip `Config.paused`.
+- `ROLE_PAUSER` — can pause/resume the mint (Pausable extension).
 - `ROLE_COMPLIANCE_DELEGATE` — can `force_transfer` and `force_burn` from any
   holder ATA, via the mint's `PermanentDelegate` extension. Used for sanctions
   seizure, recovery of misdirected funds, and wind-down.
 - `ROLE_RESPONDER` — approves/rejects timelock proposals (maker/checker).
 - `ROLE_EMERGENCY` — bypasses the timelock delay on timelockable actions.
+
+**Genesis role.** `initialize` grants the deployer `ROLE_EMERGENCY`. It is the
+one bootstrap grant: from it the admin can grant every other role via
+`set_role`'s emergency path. Without it a fresh deployment could never make its
+first grant (the normal path needs a pre-existing role to propose/respond).
+Like the EVM Diamond's owner authority, it should be a multisig in production.
 
 Compliance allow/block listing is **not** a role here — it lives in the external
 ABL gate program, whose list authority is set client-side at bootstrap.

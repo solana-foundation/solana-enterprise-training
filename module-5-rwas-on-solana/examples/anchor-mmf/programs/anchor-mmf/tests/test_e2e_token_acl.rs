@@ -11,15 +11,16 @@
 //!      rejected by the transfer hook with `RateLimitExceeded`.
 //!
 //! All instructions are hand-built with `solana_instruction` so the test does
-//! not depend on any program's generated client. Anchor instruction/account
-//! discriminators are computed as `sha256("<ns>:<name>")[..8]`. The role
-//! system has a bootstrapping gap (granting the first role needs a pre-existing
-//! role), which is orthogonal to what this test exercises, so the granted
-//! `ROLE_MINTER` PDA is injected directly into the SVM.
+//! not depend on any program's generated client. Anchor instruction
+//! discriminators are computed as `sha256("global:<name>")[..8]`.
+//!
+//! No role accounts are injected: `initialize` grants the deployer the genesis
+//! `ROLE_EMERGENCY`, and `ROLE_MINTER` is then granted through the real
+//! `set_role` emergency path - exactly how a fresh deployment bootstraps its
+//! roles on-chain.
 
 use litesvm::LiteSVM;
 use sha2::{Digest, Sha256};
-use solana_account::Account;
 use solana_address::Address;
 use solana_instruction::{AccountMeta, Instruction};
 use solana_keypair::Keypair;
@@ -39,6 +40,7 @@ const SYSTEM_PROGRAM: Address = Address::from_str_const("11111111111111111111111
 const SYSVAR_RENT: Address = Address::from_str_const("SysvarRent111111111111111111111111111111111");
 
 const ROLE_MINTER: [u8; 32] = *b"MMF__MINTER_ROLE________________";
+const ROLE_EMERGENCY: [u8; 32] = *b"MMF__EMERGENCY_ROLE_____________";
 
 // MMF mint has 4 decimals; the hook's default cap is 1_000_000 base units.
 const DECIMALS: u8 = 4;
@@ -229,6 +231,68 @@ fn transfer_checked(
     }
 }
 
+/// mmf_admin `set_paused` via the emergency path (role = ROLE_EMERGENCY,
+/// timelock = None). Drives the Token-2022 Pausable extension.
+fn set_paused(
+    admin: &Address,
+    config: &Address,
+    emergency_role: &Address,
+    mint: &Address,
+    paused: bool,
+) -> Instruction {
+    let mut data = ix_disc("set_paused").to_vec();
+    data.push(paused as u8);
+    Instruction {
+        program_id: MMF_ADMIN,
+        accounts: vec![
+            AccountMeta::new(*admin, true),                    // pauser
+            AccountMeta::new(*config, false),                  // config (mut)
+            AccountMeta::new_readonly(*emergency_role, false), // role (emergency)
+            AccountMeta::new_readonly(MMF_ADMIN, false),       // timelock = None
+            AccountMeta::new(*mint, false),                    // mint (mut)
+            AccountMeta::new_readonly(TOKEN_2022, false),
+        ],
+        data,
+    }
+}
+
+/// mmf_admin `force_transfer` via the emergency path. Carries the transfer
+/// hook's accounts; the hook skips rate limiting for the permanent delegate.
+fn force_transfer(
+    admin: &Address,
+    config: &Address,
+    emergency_role: &Address,
+    mint: &Address,
+    from_ata: &Address,
+    to_ata: &Address,
+    amount: u64,
+) -> Instruction {
+    let rate_config = pda(&[b"mmf-rate-config", mint.as_ref()], &HOOK).0;
+    // Keyed on the permanent delegate (Config PDA): non-existent, the hook skips it.
+    let rate_limit = pda(&[b"mmf-rate-limit", mint.as_ref(), config.as_ref()], &HOOK).0;
+    let ealist = pda(&[b"extra-account-metas", mint.as_ref()], &HOOK).0;
+    let mut data = ix_disc("force_transfer").to_vec();
+    data.extend_from_slice(&amount.to_le_bytes());
+    Instruction {
+        program_id: MMF_ADMIN,
+        accounts: vec![
+            AccountMeta::new(*admin, true),                    // delegate
+            AccountMeta::new_readonly(*config, false),
+            AccountMeta::new_readonly(*emergency_role, false), // role (emergency)
+            AccountMeta::new_readonly(MMF_ADMIN, false),       // timelock = None
+            AccountMeta::new_readonly(*mint, false),
+            AccountMeta::new(*from_ata, false),
+            AccountMeta::new(*to_ata, false),
+            AccountMeta::new_readonly(TOKEN_2022, false),
+            AccountMeta::new_readonly(HOOK, false),            // transfer_hook_program
+            AccountMeta::new_readonly(ealist, false),          // hook_extra_account_meta_list
+            AccountMeta::new_readonly(rate_config, false),     // hook_rate_config
+            AccountMeta::new(rate_limit, false),               // hook_rate_limit (mut)
+        ],
+        data,
+    }
+}
+
 #[test]
 fn token_acl_end_to_end() {
     let mut svm = LiteSVM::new();
@@ -251,14 +315,22 @@ fn token_acl_end_to_end() {
     }
     let mint = mint_kp.pubkey();
     let config = pda(&[b"mmf-config"], &MMF_ADMIN).0;
+    // Genesis ROLE_EMERGENCY PDA for the admin (granted by `initialize`).
+    let emergency_role = pda(
+        &[b"mmf-role", &ROLE_EMERGENCY, admin.pubkey().as_ref()],
+        &MMF_ADMIN,
+    )
+    .0;
 
-    // 1. Issuer bootstrap: create the default-frozen MMF mint.
+    // 1. Issuer bootstrap: create the default-frozen MMF mint and grant the
+    //    deployer ROLE_EMERGENCY (the genesis role).
     let initialize = Instruction {
         program_id: MMF_ADMIN,
         accounts: vec![
             AccountMeta::new(admin.pubkey(), true),
             AccountMeta::new(config, false),
             AccountMeta::new(mint, true),
+            AccountMeta::new(emergency_role, false),
             AccountMeta::new_readonly(HOOK, false),
             AccountMeta::new_readonly(TOKEN_2022, false),
             AccountMeta::new_readonly(SYSTEM_PROGRAM, false),
@@ -376,27 +448,27 @@ fn token_acl_end_to_end() {
     send(&mut svm, &[init_rate_limit(&admin.pubkey(), &holder_a.pubkey(), &mint)], &admin.pubkey(), &[&admin])
         .expect("init_rate_limit");
 
-    // 6. Inject a granted ROLE_MINTER PDA for the admin (bypasses role bootstrap).
-    let (role_pda, role_bump) = pda(
-        &[b"mmf-role", &ROLE_MINTER, admin.pubkey().as_ref()],
-        &MMF_ADMIN,
-    );
-    let mut role_data = disc("account", "Role").to_vec();
-    role_data.extend_from_slice(&ROLE_MINTER);
-    role_data.extend_from_slice(admin.pubkey().as_ref());
-    role_data.push(1); // granted
-    role_data.push(role_bump);
-    svm.set_account(
-        role_pda,
-        Account {
-            lamports: svm.minimum_balance_for_rent_exemption(role_data.len()),
-            data: role_data,
-            owner: MMF_ADMIN,
-            executable: false,
-            rent_epoch: 0,
-        },
-    )
-    .unwrap();
+    // 6. Grant the admin ROLE_MINTER via set_role's emergency path. This works
+    //    only because `initialize` granted the deployer the genesis
+    //    ROLE_EMERGENCY (#4) - it is the real bootstrap, not an injected account.
+    let role_pda = pda(&[b"mmf-role", &ROLE_MINTER, admin.pubkey().as_ref()], &MMF_ADMIN).0;
+    let mut set_role_data = ix_disc("set_role").to_vec();
+    set_role_data.extend_from_slice(&ROLE_MINTER); // role: [u8; 32]
+    set_role_data.push(1); // granted = true
+    let set_role = Instruction {
+        program_id: MMF_ADMIN,
+        accounts: vec![
+            AccountMeta::new(admin.pubkey(), true),
+            AccountMeta::new_readonly(config, false),
+            AccountMeta::new_readonly(admin.pubkey(), false), // grantee
+            AccountMeta::new(role_pda, false),                // role_account (init)
+            AccountMeta::new_readonly(MMF_ADMIN, false),      // timelock = None sentinel
+            AccountMeta::new_readonly(emergency_role, false), // emergency_role = Some
+            AccountMeta::new_readonly(SYSTEM_PROGRAM, false),
+        ],
+        data: set_role_data,
+    };
+    send(&mut svm, &[set_role], &admin.pubkey(), &[&admin]).expect("set_role (grant MINTER)");
 
     // 7. Mint MMF to holder A (now that the ATA is thawed).
     let a_ata = ata(&holder_a.pubkey(), &mint);
@@ -454,4 +526,59 @@ fn token_acl_end_to_end() {
     );
     // B's balance is unchanged by the rejected transfer.
     assert_eq!(token_amount(&svm, &b_ata), under, "rejected transfer must not move tokens");
+
+    // 10. Pause (#1): the Token-2022 Pausable extension makes pause a real
+    //     circuit breaker - the protocol itself rejects all movement. Driven
+    //     by the emergency path (genesis ROLE_EMERGENCY).
+    send(
+        &mut svm,
+        &[set_paused(&admin.pubkey(), &config, &emergency_role, &mint, true)],
+        &admin.pubkey(),
+        &[&admin],
+    )
+    .expect("pause");
+
+    // A within-cap transfer that would otherwise succeed is now blocked.
+    let paused_try = send(
+        &mut svm,
+        &[transfer_checked(&mint, &holder_a.pubkey(), &a_ata, &b_ata, 100_000)],
+        &holder_a.pubkey(),
+        &[&holder_a],
+    );
+    assert!(paused_try.is_err(), "transfers must fail while paused");
+    assert_eq!(token_amount(&svm, &b_ata), under, "paused transfer must not move tokens");
+
+    // Resume; a (distinct-amount) transfer now goes through.
+    send(
+        &mut svm,
+        &[set_paused(&admin.pubkey(), &config, &emergency_role, &mint, false)],
+        &admin.pubkey(),
+        &[&admin],
+    )
+    .expect("resume");
+    send(
+        &mut svm,
+        &[transfer_checked(&mint, &holder_a.pubkey(), &a_ata, &b_ata, 120_000)],
+        &holder_a.pubkey(),
+        &[&holder_a],
+    )
+    .expect("transfer after resume");
+    assert_eq!(token_amount(&svm, &b_ata), under + 120_000, "resumed transfer should move tokens");
+
+    // 11. Force transfer (#2): a compliance seizure larger than the rate cap.
+    //     A's window is near the cap, so a normal 1_000_000 transfer would be
+    //     rejected - the force path must bypass the hook's rate limit.
+    let seize = 1_000_000u64;
+    send(
+        &mut svm,
+        &[force_transfer(&admin.pubkey(), &config, &emergency_role, &mint, &a_ata, &b_ata, seize)],
+        &admin.pubkey(),
+        &[&admin],
+    )
+    .expect("force_transfer must bypass the rate limit");
+    assert_eq!(
+        token_amount(&svm, &b_ata),
+        under + 120_000 + seize,
+        "force transfer should move tokens despite the cap"
+    );
 }
