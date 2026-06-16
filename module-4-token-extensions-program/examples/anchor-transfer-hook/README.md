@@ -277,4 +277,4 @@ This ensures the transfer hook can only be executed as part of a Token-2022 tran
 
 ---
 
-This rate limit transfer hook provides an automatic throttling mechanism for Token 2022 mints, ensuring that no single user can transfer more than a configured maximum amount within a fixed time window - all enforced on-chain without requiring additional user intervention. The pure rate-limit logic is unit-tested in `src/state/rate_limit.rs` (run `cargo test`, no validator needed). Module 5's `anchor-mmf` example builds on the same pattern with an admin-tunable per-mint configuration.
+This rate limit transfer hook provides an automatic throttling mechanism for Token 2022 mints, ensuring that no single user can transfer more than a configured maximum amount within a fixed time window - all enforced on-chain without requiring additional user intervention.
