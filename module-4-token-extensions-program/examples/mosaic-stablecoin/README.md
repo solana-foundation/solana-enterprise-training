@@ -10,9 +10,9 @@ This project shows enterprise compliance officers and engineering teams how Sola
 
 | Script | What it does | Compliance feature |
 |--------|-------------|-------------------|
-| `01-create-stablecoin.ts` | Creates a new stablecoin mint with all compliance extensions | Token creation with Metadata, Pausable, Confidential Balances, Permanent Delegate, sRFC-37 Blocklist |
+| `01-create-stablecoin.ts` | Creates a new stablecoin mint with all compliance extensions | Token creation with Metadata, Pausable, Confidential Balances, Permanent Delegate, sRFC-37 deny list |
 | `02-mint-tokens.ts` | Mints tokens to a recipient wallet | Automatic ATA creation, sRFC-37 thaw handling |
-| `03-blocklist-address.ts` | Adds a wallet to the on-chain blocklist and freezes it | OFAC / sanctions screening - atomic blocklist + freeze |
+| `03-sanction-address.ts` | Adds a wallet to the on-chain deny list and freezes it | OFAC / sanctions screening - atomic deny-list add + freeze |
 | `04-force-transfer.ts` | Seizes tokens from any wallet without owner approval | Court-ordered asset seizure via Permanent Delegate |
 | `05-pause-token.ts` | Halts all token transfers globally | Emergency circuit breaker for incident response |
 | `06-inspect-token.ts` | Reads full on-chain state for audit | Compliance audit - all authorities and extensions visible |
@@ -30,10 +30,10 @@ This project shows enterprise compliance officers and engineering teams how Sola
 │  │  Templates   │  │  Management  │  │    Inspection       │    │
 │  │  (Stablecoin │  │  (Mint, Burn │  │    (Audit, Read     │    │
 │  │   Arcade,    │  │   Pause,     │  │     on-chain state) │    │
-│  │   Security)  │  │   Blocklist) │  │                     │    │
+│  │   Security)  │  │   DenyList)  │  │                     │    │
 │  └──────────────┘  └──────────────┘  └────────────────────┘    │
 ├─────────────────────────────────────────────────────────────────┤
-│  Token ACL (sRFC-37)    │    ABL (Allowlist / Blocklist)        │
+│  Token ACL (sRFC-37)    │    ABL (Allow / Deny lists)           │
 ├─────────────────────────────────────────────────────────────────┤
 │                  Solana Token-2022 Program                       │
 │  Metadata · Pausable · ConfidentialBalances · PermanentDelegate │
@@ -82,11 +82,11 @@ npm run create-token
 #   → Set RECIPIENT_ADDRESS in .env first
 npm run mint-tokens
 
-# Step 3: Blocklist a sanctioned wallet
+# Step 3: Sanction (deny-list + freeze) a wallet
 #   → Set SANCTIONED_WALLET in .env first
-npm run blocklist
+npm run sanction
 
-# Step 4: Force-transfer (seize) tokens from the blocked wallet
+# Step 4: Force-transfer (seize) tokens from the sanctioned wallet
 #   → Set RECOVERY_WALLET in .env first
 npm run force-transfer
 
@@ -102,11 +102,13 @@ npm run inspect-token
 
 ## Key Compliance Features Explained
 
-### Blocklist (sRFC-37)
+### Deny list (sRFC-37)
 
-When the stablecoin is created with `enableSrfc37: true` and `aclMode: "blocklist"`, all new token accounts start in an active (unfrozen) state. The issuer can add any wallet to the blocklist at any time, which atomically freezes that wallet's token account. Blocklisted wallets cannot send, receive, or interact with the token until they are removed from the list.
+When the stablecoin is created with `enableSrfc37: true` and the SDK's `aclMode: "blocklist"` (Mosaic's name for deny-list mode), all new token accounts start in an active (unfrozen) state. The issuer can add any wallet to the deny list at any time, which atomically freezes that wallet's token account. Sanctioned wallets cannot send, receive, or interact with the token until they are removed from the list.
 
 This maps directly to OFAC sanctions compliance: flag a wallet, and it is immediately frozen on-chain.
+
+**Deny list vs. allowlist:** sRFC-37 supports both modes. A deny list keeps friction at zero (anyone can hold the token until flagged), which suits a retail-facing stablecoin. Regulated instruments such as tokenized funds usually invert this: an **allowlist**, where every account starts frozen and only KYC-approved holders are thawed. Module 5's `anchor-mmf` example implements the allowlist pattern in full.
 
 ### Permanent Delegate (Asset Seizure)
 
@@ -137,12 +139,12 @@ Token account balances are encrypted on-chain. Only the account owner (and the c
 
 This demo is designed to answer the question: *"Can Solana support the compliance controls we need for a regulated token?"*
 
-The answer is yes. Every control demonstrated here - blocklisting, asset seizure, emergency pause, confidential balances, authority management - is enforced at the **protocol level** by the Token-2022 program. These are not application-layer workarounds; they are native Solana primitives.
+The answer is yes. Every control demonstrated here - sanctions freezing, asset seizure, emergency pause, confidential balances, authority management - is enforced at the **protocol level** by the Token-2022 program. These are not application-layer workarounds; they are native Solana primitives.
 
 Key points for evaluation:
 
 - **All authorities are on-chain and auditable.** Run `inspect-token` to see exactly who controls what.
-- **Blocklist enforcement is atomic.** A single transaction adds to the list and freezes the account.
+- **Deny-list enforcement is atomic.** A single transaction adds to the list and freezes the account.
 - **Asset seizure requires no owner cooperation.** The Permanent Delegate can move tokens unilaterally.
 - **Emergency pause is instant and global.** One transaction halts all operations.
 - **Everything runs on Solana devnet today.** No custom programs needed - Mosaic uses standard Token-2022 extensions.

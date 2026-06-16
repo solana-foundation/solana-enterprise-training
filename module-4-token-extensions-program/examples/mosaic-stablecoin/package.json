@@ -7,7 +7,7 @@
     "build": "tsc",
     "create-token": "npx tsx src/01-create-stablecoin.ts",
     "mint-tokens": "npx tsx src/02-mint-tokens.ts",
-    "blocklist": "npx tsx src/03-blocklist-address.ts",
+    "sanction": "npx tsx src/03-sanction-address.ts",
     "force-transfer": "npx tsx src/04-force-transfer.ts",
     "pause-token": "npx tsx src/05-pause-token.ts",
     "inspect-token": "npx tsx src/06-inspect-token.ts"

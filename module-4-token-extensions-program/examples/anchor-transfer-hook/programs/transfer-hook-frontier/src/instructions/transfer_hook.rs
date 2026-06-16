@@ -38,11 +38,13 @@ pub fn handler(ctx: Context<TransferHook>, amount: u64) -> Result<()> {
     // Fail this instruction if it is not called from within a transfer hook
     check_is_transferring(&ctx)?;
 
-    // Check if the rate limit has expired and reset it if necessary
+    // If the current window has expired, open a fresh one. The window start
+    // is fixed: update() never moves it, so steady traffic cannot keep a
+    // window alive forever (see state/rate_limit.rs).
     let current_time = Clock::get()?.unix_timestamp;
-    if current_time - ctx.accounts.rate_limit.last_updated > ONE_HOUR {
-        ctx.accounts.rate_limit.reset();
-        msg!("Rate limit has been reset due to expiration");
+    if ctx.accounts.rate_limit.is_expired(current_time, ONE_HOUR) {
+        ctx.accounts.rate_limit.reset(current_time);
+        msg!("Rate limit window expired - opening a new window");
     }
 
     // Check if the transfer amount exceeds the rate limit
@@ -69,9 +71,13 @@ fn check_is_transferring(ctx: &Context<TransferHook>) -> Result<()> {
     let account = PodStateWithExtensions::<PodAccount>::unpack(*account_data_ref)?;
     let account_extension = account.get_extension::<TransferHookAccount>()?;
 
-    if !bool::from(account_extension.transferring) {
-        panic!("TransferHook: Not transferring");
-    }
+    // Return a proper error rather than panicking: a panic aborts with an
+    // opaque SBF error, while an Anchor error surfaces a clear code and
+    // message to the client.
+    require!(
+        bool::from(account_extension.transferring),
+        crate::error::ErrorCode::NotTransferring
+    );
 
     Ok(())
 }

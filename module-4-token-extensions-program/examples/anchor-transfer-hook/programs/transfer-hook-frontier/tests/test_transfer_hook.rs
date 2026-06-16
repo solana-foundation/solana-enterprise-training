@@ -56,7 +56,7 @@ fn test_transfer_hook_rate_limit_exceeded() {
     // Mint more than the rate limit so we have enough tokens
     mint_tokens(&mut svm, &payer, &mint.pubkey(), &source_ata, 2_000_000);
 
-    // First transfer: exactly at the limit — should succeed
+    // First transfer: exactly at the limit - should succeed
     let ix1 = build_transfer_with_hook_ix(
         &source_ata, &dest_ata, &mint.pubkey(), &payer.pubkey(), &program_id, 1_000_000, 9,
     );
@@ -66,7 +66,7 @@ fn test_transfer_hook_rate_limit_exceeded() {
     let res = svm.send_transaction(tx);
     assert!(res.is_ok(), "Transfer at limit should succeed: {:?}", res.err());
 
-    // Second transfer: 1 token more — should fail with RateLimitExceeded
+    // Second transfer: 1 token more - should fail with RateLimitExceeded
     let ix2 = build_transfer_with_hook_ix(
         &source_ata, &dest_ata, &mint.pubkey(), &payer.pubkey(), &program_id, 1, 9,
     );

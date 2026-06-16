@@ -7,10 +7,12 @@
  * Extensions enabled:
  *   • Metadata          - on-chain name, symbol, URI
  *   • Pausable          - halt all transfers in an emergency
- *   • DefaultAccountState (Frozen) - new accounts start frozen (blocklist mode)
+ *   • DefaultAccountState - account state managed by sRFC-37
  *   • ConfidentialBalances - encrypted balances for privacy
  *   • PermanentDelegate - authority can seize / force-transfer tokens
- *   • sRFC-37 (Token ACL + ABL) - on-chain blocklist enforcement
+ *   • sRFC-37 (Token ACL + ABL) - on-chain deny-list enforcement
+ *     (the SDK calls this mode "blocklist"; Module 5 shows the
+ *     allowlist alternative regulated issuers typically prefer)
  *
  * Usage:
  *   npm run create-token
@@ -46,8 +48,8 @@ async function main() {
   console.log("    Pausable");
   console.log("    Confidential Balances");
   console.log("    Permanent Delegate");
-  console.log("    Default Account State (Frozen → blocklist mode)");
-  console.log("    sRFC-37 Token ACL + ABL Blocklist");
+  console.log("    Default Account State (managed by sRFC-37)");
+  console.log("    sRFC-37 Token ACL + ABL deny list");
   console.log();
 
   const tx = await createStablecoinInitTransaction(
@@ -59,7 +61,7 @@ async function main() {
     authority,                             // mintAuthority
     mint,                                  // mint keypair
     authority,                             // feePayer
-    "blocklist",                           // aclMode - blocklist (sanctions screening)
+    "blocklist",                           // aclMode - the SDK's deny-list mode (sanctions screening)
     authority.address,                     // metadataAuthority
     authority.address,                     // pausableAuthority
     authority.address,                     // confidentialBalancesAuthority
