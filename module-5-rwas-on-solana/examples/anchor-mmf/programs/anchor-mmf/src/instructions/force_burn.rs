@@ -21,8 +21,7 @@ use crate::{
 ///
 /// **Emergency path** — `timelock` is `None`. The delegate holds
 /// `ROLE_EMERGENCY`. No delay required — used during active incidents
-/// where waiting would increase harm (e.g. sanctioned entity about to
-/// move funds).
+/// where waiting would increase harm (e.g. sanctioned entity about to move funds).
 ///
 /// In both paths the Config PDA acts as permanent delegate on the mint,
 /// so Token-2022 authorizes the burn from any holder ATA.
@@ -50,8 +49,7 @@ pub struct ForceBurn<'info> {
     #[account(mut)]
     pub mint: InterfaceAccount<'info, Mint>,
 
-    /// Any holder ATA. Authority is not constrained — the Config PDA is
-    /// the mint's permanent delegate.
+    /// Any holder ATA. Authority is not constrained — the Config PDA is the mint's permanent delegate.
     #[account(mut, token::mint = mint)]
     pub from_ata: InterfaceAccount<'info, TokenAccount>,
 
@@ -85,8 +83,7 @@ pub fn handler(ctx: Context<ForceBurn>, amount: u64) -> Result<()> {
                 MmfError::TimelockNotReady
             );
 
-            // Bind execution to the accepted proposal: the source ATA and
-            // amount must match what was approved.
+            // Bind execution to the accepted proposal: the source ATA and amount must match what was approved.
             let expected =
                 TimeLock::encode_force_burn(&ctx.accounts.from_ata.key(), amount);
             timelock.verify_action_data(&expected)?;

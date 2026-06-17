@@ -6,8 +6,6 @@ pub enum MmfError {
     NotAdmin,
     #[msg("Signer does not hold the required role")]
     MissingRole,
-    #[msg("Program is paused — transfers and issuance are disabled")]
-    Paused,
     #[msg("Provided mint does not match the mint recorded in Config")]
     MintMismatch,
     #[msg("Amount must be greater than zero")]

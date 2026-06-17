@@ -1,7 +1,6 @@
 //! # MMF Admin Program
 //!
-//! Solana-native analogue of the MMF ERC-2535 Diamond deployed on Ethereum
-//! at `0x6a7c6aa2b8b8a6a891de552bdeffa87c3f53bd46`.
+//! Solana-native analogue of the MMF ERC-2535 Diamond deployed on Ethereum.
 //!
 //! Where the Ethereum implementation uses EIP-2535 (Diamond) to give the issuer a
 //! single, upgradeable contract address backed by many facets, on Solana we
@@ -9,7 +8,8 @@
 //! instruction dispatch. This program owns **all** state that backs the MMF
 //! token:
 //!
-//! * `Config`    — program admin, pause flag, mint pubkey, version.
+//! * `Config`    — program admin, mint pubkey, version. (Pause state lives in
+//!                 the mint's Token-2022 Pausable extension, not here.)
 //! * `Role`      — one PDA per (role, pubkey), modelling OpenZeppelin-style
 //!                 role-based access control.
 //! * `TimeLock`  — generic timelock proposal PDA backing the
@@ -107,8 +107,9 @@ pub mod mmf_admin {
 
     /*  **** Pause (timelockable) **** */
 
-    /// Toggle the global pause flag. Normal path requires `ROLE_PAUSER`
-    /// + timelock; emergency path requires `ROLE_EMERGENCY`.
+    /// Pause or resume the mint via its Token-2022 Pausable extension. Normal
+    /// path requires `ROLE_PAUSER` + timelock; emergency path requires
+    /// `ROLE_EMERGENCY`.
     ///
     /// Maps to `PausableFacetTimelockable`.
     pub fn set_paused(ctx: Context<SetPaused>, paused: bool) -> Result<()> {

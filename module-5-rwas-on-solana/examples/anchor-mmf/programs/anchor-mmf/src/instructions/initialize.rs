@@ -206,7 +206,6 @@ pub fn handler(ctx: Context<Initialize>) -> Result<()> {
     ctx.accounts.config.set_inner(Config {
         admin: ctx.accounts.admin.key(),
         mint: ctx.accounts.mint.key(),
-        paused: false,
         version: 1,
         bump: ctx.bumps.config,
     });

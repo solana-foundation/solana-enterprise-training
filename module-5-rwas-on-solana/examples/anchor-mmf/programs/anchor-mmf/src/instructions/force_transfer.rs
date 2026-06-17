@@ -58,8 +58,7 @@ pub struct ForceTransfer<'info> {
 
     pub mint: InterfaceAccount<'info, Mint>,
 
-    /// Source ATA. *Any* holder ATA is accepted — the Config PDA is the
-    /// mint's permanent delegate.
+    /// Source ATA. *Any* holder ATA is accepted — the Config PDA is themint's permanent delegate.
     #[account(mut, token::mint = mint)]
     pub from_ata: InterfaceAccount<'info, TokenAccount>,
 
@@ -74,6 +73,7 @@ pub struct ForceTransfer<'info> {
     // detects that the authority is the permanent delegate and skips rate
     // limiting, so a seizure is never throttled - but Token-2022 still
     // resolves and passes these, so they must be present.
+    
     /// CHECK: the mint's transfer hook program; Token-2022 invokes it.
     pub transfer_hook_program: UncheckedAccount<'info>,
     /// CHECK: hook ExtraAccountMetaList PDA (`["extra-account-metas", mint]`).

@@ -26,8 +26,8 @@ use crate::{
 /// rejects every transfer, mint, and burn of the mint - including
 /// permanent-delegate moves, so `force_transfer` / `force_burn` are also
 /// halted. To seize during an incident, resume, act, then re-pause. Thawing
-/// (owned by the external Token ACL) is unaffected. `Config.paused` is kept as
-/// a cached mirror for off-chain readers; the protocol is the source of truth.
+/// (owned by the external Token ACL) is unaffected. The pause state is read
+/// from the mint's Pausable extension - this program keeps no mirror of it.
 #[derive(Accounts)]
 pub struct SetPaused<'info> {
     pub pauser: Signer<'info>,
@@ -93,8 +93,7 @@ pub fn handler(ctx: Context<SetPaused>, paused: bool) -> Result<()> {
         }
     }
 
-    // Drive the Token-2022 Pausable extension, signed by the Config PDA (the
-    // mint's pause authority).
+    // Drive the Token-2022 Pausable extension, signed by the Config PDA (the mint's pause authority).
     let bump = [ctx.accounts.config.bump];
     let signer_seeds: &[&[&[u8]]] = &[&[CONFIG_SEED, &bump]];
     let token_program_id = ctx.accounts.token_program.key();
@@ -114,8 +113,8 @@ pub fn handler(ctx: Context<SetPaused>, paused: bool) -> Result<()> {
         signer_seeds,
     )?;
 
-    // Cached mirror for off-chain readers; the protocol enforces the pause.
-    ctx.accounts.config.paused = paused;
+    // The pause state lives in the mint's Pausable extension (the source of
+    // truth); we only bump the config version as a "config changed" signal.
     ctx.accounts.config.version = ctx.accounts.config.version.saturating_add(1);
     msg!("MMF paused={}", paused);
 
