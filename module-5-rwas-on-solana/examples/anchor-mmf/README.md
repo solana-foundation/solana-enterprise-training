@@ -89,7 +89,9 @@ Defined in `mmf_admin::state::role`:
 - `ROLE_PAUSER` — can pause/resume the mint (Pausable extension).
 - `ROLE_COMPLIANCE_DELEGATE` — can `force_transfer` and `force_burn` from any
   holder ATA, via the mint's `PermanentDelegate` extension. Used for sanctions
-  seizure, recovery of misdirected funds, and wind-down.
+  seizure, recovery of misdirected funds, and wind-down. Every seizure emits an
+  `AssetSeizure` audit event via `emit_cpi!` (on both the timelocked and the
+  emergency path), so the action leaves a durable, indexable record.
 - `ROLE_RESPONDER` — approves/rejects timelock proposals (maker/checker).
 - `ROLE_EMERGENCY` — bypasses the timelock delay on timelockable actions.
 

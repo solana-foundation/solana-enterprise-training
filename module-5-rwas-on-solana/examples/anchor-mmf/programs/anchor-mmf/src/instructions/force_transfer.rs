@@ -9,6 +9,7 @@ use anchor_spl::{
 use crate::{
     constants::{CONFIG_SEED, ROLE_SEED, TIMELOCK_FORCE_ACTION},
     error::MmfError,
+    events::{AssetSeizure, SeizureKind},
     state::{
         Config, Role, TimeLock, TimeLockOperation, TimeLockStatus,
         ROLE_COMPLIANCE_DELEGATE, ROLE_EMERGENCY,
@@ -35,6 +36,7 @@ use crate::{
 /// `transfer_checked` fires the hook, which CPIs to
 /// `mmf_transfer_hook`. Splitting the hook into its own program
 /// makes re-entrancy impossible here.
+#[event_cpi]
 #[derive(Accounts)]
 pub struct ForceTransfer<'info> {
     pub delegate: Signer<'info>,
@@ -178,5 +180,21 @@ pub fn handler(ctx: Context<ForceTransfer>, amount: u64) -> Result<()> {
         ctx.accounts.from_ata.key(),
         ctx.accounts.to_ata.key()
     );
+
+    // Durable audit record of the seizure (see `events::AssetSeizure`),
+    // emitted on both the timelocked and the emergency path.
+    let timelock = ctx.accounts.timelock.as_ref().map(|tl| tl.key());
+    emit_cpi!(AssetSeizure {
+        mint: ctx.accounts.mint.key(),
+        from_ata: ctx.accounts.from_ata.key(),
+        to_ata: Some(ctx.accounts.to_ata.key()),
+        amount,
+        kind: SeizureKind::Transfer,
+        authority: ctx.accounts.delegate.key(),
+        emergency: timelock.is_none(),
+        timelock,
+        timestamp: Clock::get()?.unix_timestamp,
+    });
+
     Ok(())
 }

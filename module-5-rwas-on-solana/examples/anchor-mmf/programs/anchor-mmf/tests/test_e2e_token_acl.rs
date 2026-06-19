@@ -271,6 +271,9 @@ fn force_transfer(
     // Keyed on the permanent delegate (Config PDA): non-existent, the hook skips it.
     let rate_limit = pda(&[b"mmf-rate-limit", mint.as_ref(), config.as_ref()], &HOOK).0;
     let ealist = pda(&[b"extra-account-metas", mint.as_ref()], &HOOK).0;
+    // `#[event_cpi]` on ForceTransfer appends these two accounts (the event
+    // authority PDA and the program itself) for the AssetSeizure self-CPI.
+    let event_authority = pda(&[b"__event_authority"], &MMF_ADMIN).0;
     let mut data = ix_disc("force_transfer").to_vec();
     data.extend_from_slice(&amount.to_le_bytes());
     Instruction {
@@ -288,6 +291,8 @@ fn force_transfer(
             AccountMeta::new_readonly(ealist, false),          // hook_extra_account_meta_list
             AccountMeta::new_readonly(rate_config, false),     // hook_rate_config
             AccountMeta::new(rate_limit, false),               // hook_rate_limit (mut)
+            AccountMeta::new_readonly(event_authority, false), // event_authority (#[event_cpi])
+            AccountMeta::new_readonly(MMF_ADMIN, false),       // program (#[event_cpi])
         ],
         data,
     }
