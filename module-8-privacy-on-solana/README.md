@@ -243,4 +243,4 @@ The takeaway for an architect: privacy on Solana is not one technique but a spec
 - [Confidential Balances Overview](https://www.solana-program.com/docs/confidential-balances/overview)
 - [Private Channels - Solana Launch](https://launch.solana.com/products/private-channels)
 - [Arcium](https://www.arcium.com/) - decentralized confidential computation (MPC)
-- [Helius - acquiring Light Protocol to build a canonical privacy layer](https://www.helius.dev/) - ZK-compression privacy layer (announced)
+- [Helius - acquiring Light Protocol to build a canonical privacy layer](https://www.helius.dev/blog/light-protocol-acquisition)
