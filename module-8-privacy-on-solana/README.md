@@ -59,9 +59,9 @@ The privacy stack is organized into three layers, each solving a different scope
 
 ## 3. Token Extensions Architecture
 
-Confidential Transfers is one extension within Token-2022's broader programmable extension model. It is important to understand where it sits alongside the other extensions participants have already seen.
+Confidential Balances is itself a suite of Token-2022 extensions, not a single feature. It spans confidential **transfers** (encrypted transfer amounts, the focus of Sections 4-6), confidential **mint and burn** (issuance and redemption without revealing quantities), and confidential **transfer fees** (fees that stay encrypted alongside the amounts they apply to). All three share the same cryptographic machinery below. It is important to understand where this suite sits alongside the other Token-2022 extensions participants have already seen.
 
-Available extensions include Transfer Fees, Interest-Bearing Tokens, Non-Transferable Tokens, Transfer Hook, Freeze Authority, and Metadata Extension. Confidential Transfers is composable with these - a token can have encrypted amounts and transfer hooks and freeze authority simultaneously.
+Available extensions include Transfer Fees, Interest-Bearing Tokens, Non-Transferable Tokens, Transfer Hook, Freeze Authority, and Metadata Extension. Confidential Balances is composable with these - a token can have encrypted amounts and transfer hooks and freeze authority simultaneously.
 
 The key cryptographic primitives:
 
@@ -236,10 +236,6 @@ The takeaway for an architect: privacy on Solana is not one technique but a spec
 ## Code Example
 
 [PLACEHOLDER - Module 8 Code Example]
-
-## Hands-On Exercises
-
-[PLACEHOLDER - Module 8 Exercises]
 
 ## Additional Resources
 
