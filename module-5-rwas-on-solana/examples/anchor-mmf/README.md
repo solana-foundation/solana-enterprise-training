@@ -90,16 +90,24 @@ Defined in `mmf_admin::state::role`:
 - `ROLE_COMPLIANCE_DELEGATE` — can `force_transfer` and `force_burn` from any
   holder ATA, via the mint's `PermanentDelegate` extension. Used for sanctions
   seizure, recovery of misdirected funds, and wind-down. Every seizure emits an
-  `AssetSeizure` audit event via `emit_cpi!` (on both the timelocked and the
-  emergency path), so the action leaves a durable, indexable record.
+  `AssetSeizure` audit event via `emit_cpi!`, so the action leaves a durable,
+  indexable record.
 - `ROLE_RESPONDER` — approves/rejects timelock proposals (maker/checker).
-- `ROLE_EMERGENCY` — bypasses the timelock delay on timelockable actions.
 
-**Genesis role.** `initialize` grants the deployer `ROLE_EMERGENCY`. It is the
-one bootstrap grant: from it the admin can grant every other role via
-`set_role`'s emergency path. Without it a fresh deployment could never make its
-first grant (the normal path needs a pre-existing role to propose/respond).
-Like the EVM Diamond's owner authority, it should be a multisig in production.
+**No emergency role.** Every privileged action goes through the maker/checker
+timelock - there is no break-glass key that bypasses the delay or the second
+signer. Urgency is handled out of band: a single bad holder is stopped
+instantly by **freezing** the account (gate block-list / Token ACL freeze, a
+one-signature client action), after which the on-chain force/burn/pause is
+never time-critical and can take the normal governed path.
+
+**Genesis roles.** Because every timelocked action needs two distinct keys (a
+proposer with the action's role + a responder), a clean slate cannot bootstrap
+itself. So `initialize` seeds an operable starting set directly: the deployer
+receives the operator roles (`ROLE_MINTER`, `ROLE_PAUSER`,
+`ROLE_COMPLIANCE_DELEGATE`) and a second `responder` key receives
+`ROLE_RESPONDER`. In production the admin should hand each operator role to a
+dedicated key and revoke its own, via the normal timelocked `set_role`.
 
 Compliance allow/block listing is **not** a role here — it lives in the external
 ABL gate program, whose list authority is set client-side at bootstrap.

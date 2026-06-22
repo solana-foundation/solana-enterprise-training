@@ -16,7 +16,9 @@ use anchor_spl::{
 
 use crate::{
     constants::{ANCHOR_DISCRIMINATOR_SIZE, CONFIG_SEED, MMF_DECIMALS, ROLE_SEED},
-    state::{Config, Role, ROLE_EMERGENCY},
+    state::{
+        Config, Role, ROLE_COMPLIANCE_DELEGATE, ROLE_MINTER, ROLE_PAUSER, ROLE_RESPONDER,
+    },
 };
 
 /// One-time bootstrap: creates the singleton `Config` PDA and the MMF
@@ -85,20 +87,38 @@ pub struct Initialize<'info> {
     #[account(mut)]
     pub mint: Signer<'info>,
 
-    /// Genesis role grant: the deployer receives `ROLE_EMERGENCY`. This is the
-    /// one role that bootstraps the rest - `set_role`'s emergency path lets an
-    /// `ROLE_EMERGENCY` holder grant every other role without a pre-existing
-    /// timelock. Without it a fresh deployment could never grant its first
-    /// role. It is the Solana analogue of the EVM Diamond's owner/`diamondCut`
-    /// root authority and, like that, should be a multisig in production.
+    /// CHECK: the genesis maker/checker responder. Receives `ROLE_RESPONDER`
+    /// below. Only its key is used (to derive the role PDA).
+    pub responder: UncheckedAccount<'info>,
+
+    // --- Genesis roles -----------------------------------------------------
+    // Every privileged action is timelocked through maker/checker, which needs
+    // two distinct keys (a proposer with the action's role + a responder).
+    // From a clean slate that is a chicken-and-egg, so `initialize` seeds an
+    // operable starting set directly: the deployer gets the operator roles
+    // (the proposer side) and a second `responder` key gets `ROLE_RESPONDER`
+    // (the checker). In production the admin should hand each operator role to
+    // a dedicated key and revoke its own via the normal timelocked `set_role`.
     #[account(
-        init,
-        payer = admin,
-        space = ANCHOR_DISCRIMINATOR_SIZE + Role::INIT_SPACE,
-        seeds = [ROLE_SEED, ROLE_EMERGENCY.as_ref(), admin.key().as_ref()],
-        bump,
+        init, payer = admin, space = ANCHOR_DISCRIMINATOR_SIZE + Role::INIT_SPACE,
+        seeds = [ROLE_SEED, ROLE_MINTER.as_ref(), admin.key().as_ref()], bump,
     )]
-    pub admin_role: Account<'info, Role>,
+    pub admin_minter_role: Account<'info, Role>,
+    #[account(
+        init, payer = admin, space = ANCHOR_DISCRIMINATOR_SIZE + Role::INIT_SPACE,
+        seeds = [ROLE_SEED, ROLE_PAUSER.as_ref(), admin.key().as_ref()], bump,
+    )]
+    pub admin_pauser_role: Account<'info, Role>,
+    #[account(
+        init, payer = admin, space = ANCHOR_DISCRIMINATOR_SIZE + Role::INIT_SPACE,
+        seeds = [ROLE_SEED, ROLE_COMPLIANCE_DELEGATE.as_ref(), admin.key().as_ref()], bump,
+    )]
+    pub admin_compliance_role: Account<'info, Role>,
+    #[account(
+        init, payer = admin, space = ANCHOR_DISCRIMINATOR_SIZE + Role::INIT_SPACE,
+        seeds = [ROLE_SEED, ROLE_RESPONDER.as_ref(), responder.key().as_ref()], bump,
+    )]
+    pub responder_role: Account<'info, Role>,
 
     /// CHECK: the sibling hook program. Only its address is read, we never
     /// CPI into it from here - Token-2022 does that on every transfer.
@@ -210,13 +230,33 @@ pub fn handler(ctx: Context<Initialize>) -> Result<()> {
         bump: ctx.bumps.config,
     });
 
-    // Genesis role: grant the deployer ROLE_EMERGENCY so the role system can
-    // be bootstrapped (see the `admin_role` doc above).
-    ctx.accounts.admin_role.set_inner(Role {
-        role: ROLE_EMERGENCY,
-        grantee: ctx.accounts.admin.key(),
+    // Genesis roles (see the accounts above): admin gets the operator roles,
+    // a second key gets ROLE_RESPONDER, so maker/checker is operable at once.
+    let admin = ctx.accounts.admin.key();
+    let responder = ctx.accounts.responder.key();
+    ctx.accounts.admin_minter_role.set_inner(Role {
+        role: ROLE_MINTER,
+        grantee: admin,
         granted: true,
-        bump: ctx.bumps.admin_role,
+        bump: ctx.bumps.admin_minter_role,
+    });
+    ctx.accounts.admin_pauser_role.set_inner(Role {
+        role: ROLE_PAUSER,
+        grantee: admin,
+        granted: true,
+        bump: ctx.bumps.admin_pauser_role,
+    });
+    ctx.accounts.admin_compliance_role.set_inner(Role {
+        role: ROLE_COMPLIANCE_DELEGATE,
+        grantee: admin,
+        granted: true,
+        bump: ctx.bumps.admin_compliance_role,
+    });
+    ctx.accounts.responder_role.set_inner(Role {
+        role: ROLE_RESPONDER,
+        grantee: responder,
+        granted: true,
+        bump: ctx.bumps.responder_role,
     });
 
     msg!(

@@ -1,8 +1,7 @@
 use anchor_lang::prelude::*;
 
 /// Durable audit record for every operator-driven seizure - emitted by both
-/// `force_transfer` and `force_burn`, on both the timelocked and the
-/// emergency (break-glass) path.
+/// `force_transfer` and `force_burn`.
 ///
 /// It is emitted with `emit_cpi!`, so the payload is written to the
 /// transaction's inner-instruction data rather than the truncatable log
@@ -12,8 +11,7 @@ use anchor_lang::prelude::*;
 /// compliance/audit pipeline is expected to ingest these events off-chain.
 ///
 /// A regulated issuer needs to evidence, after the fact, who seized what, from
-/// whom, how much, and under which authority - especially for the emergency
-/// path, which otherwise leaves only an ephemeral `msg!` log.
+/// whom, how much, and under which accepted maker/checker proposal.
 #[event]
 pub struct AssetSeizure {
     /// MMF mint the seizure acted on.
@@ -26,15 +24,10 @@ pub struct AssetSeizure {
     pub amount: u64,
     /// Whether this was a forced transfer or a forced burn.
     pub kind: SeizureKind,
-    /// Signer that executed the action - the compliance delegate on the
-    /// normal path, or the emergency authority on the break-glass path.
+    /// Signer that executed the action - the compliance delegate.
     pub authority: Pubkey,
-    /// True if executed via the emergency (no-timelock) path; false if it
-    /// went through an accepted maker/checker timelock.
-    pub emergency: bool,
-    /// The accepted `TimeLock` proposal PDA on the normal path; `None` on the
-    /// emergency path, where there is no prior proposal to reference.
-    pub timelock: Option<Pubkey>,
+    /// The accepted `TimeLock` proposal PDA this seizure executed against.
+    pub timelock: Pubkey,
     /// Block time at which the seizure executed.
     pub timestamp: i64,
 }

@@ -9,11 +9,10 @@ use crate::error::MmfError;
 ///   1. `create_timelock_proposal`  — proposer creates with operation + data
 ///   2. `respond_timelock_proposal` — responder (different entity) accepts
 ///   3. The target action handler (e.g. `force_burn`, `set_paused`) takes
-///      this PDA as `Option<Account<TimeLock>>` and validates status +
-///      delay before executing. On success it marks `Executed`.
-///
-/// Emergency path: the action handler receives `None` for the timelock
-/// account and validates `ROLE_EMERGENCY` instead — bypassing the delay.
+///      this PDA as a required `Account<TimeLock>` and validates status +
+///      delay + action-data binding before executing. On success it marks
+///      `Executed`. There is no bypass - every timelockable action goes
+///      through this flow.
 ///
 /// Seeds: `[seed.to_le_bytes(), proposer]` — the `seed: u64` is a
 /// caller-chosen nonce for uniqueness.

@@ -10,22 +10,19 @@ use crate::{
     events::{AssetSeizure, SeizureKind},
     state::{
         Config, Role, TimeLock, TimeLockOperation, TimeLockStatus,
-        ROLE_COMPLIANCE_DELEGATE, ROLE_EMERGENCY,
+        ROLE_COMPLIANCE_DELEGATE,
     },
 };
 
-/// Compliance-driven forced burn. Two paths:
+/// Compliance-driven forced burn. Always timelocked: the delegate holds
+/// `ROLE_COMPLIANCE_DELEGATE`, the `timelock` must be `Accepted` with
+/// operation `ForceBurn`, the delay must have elapsed, and the accepted
+/// parameters must match. There is no emergency bypass - to stop a holder
+/// immediately, freeze the account first (gate block-list / Token ACL), then
+/// run this through the normal maker/checker flow.
 ///
-/// **Normal path** — `timelock` is `Some`. The delegate holds
-/// `ROLE_COMPLIANCE_DELEGATE`, the timelock must be `Accepted` with
-/// operation `ForceBurn`, and the delay must have elapsed.
-///
-/// **Emergency path** — `timelock` is `None`. The delegate holds
-/// `ROLE_EMERGENCY`. No delay required — used during active incidents
-/// where waiting would increase harm (e.g. sanctioned entity about to move funds).
-///
-/// In both paths the Config PDA acts as permanent delegate on the mint,
-/// so Token-2022 authorizes the burn from any holder ATA.
+/// The Config PDA is the mint's permanent delegate, so Token-2022 authorizes
+/// the burn from any holder ATA.
 #[event_cpi]
 #[derive(Accounts)]
 pub struct ForceBurn<'info> {
@@ -46,7 +43,7 @@ pub struct ForceBurn<'info> {
     pub role: Account<'info, Role>,
 
     #[account(mut)]
-    pub timelock: Option<Account<'info, TimeLock>>,
+    pub timelock: Account<'info, TimeLock>,
 
     #[account(mut)]
     pub mint: InterfaceAccount<'info, Mint>,
@@ -62,45 +59,31 @@ pub fn handler(ctx: Context<ForceBurn>, amount: u64) -> Result<()> {
     require!(amount > 0, MmfError::ZeroAmount);
 
     let role = &ctx.accounts.role;
+    let timelock = &mut ctx.accounts.timelock;
 
-    match &mut ctx.accounts.timelock {
-        Some(timelock) => {
-            // Normal path: compliance delegate + approved timelock
-            require!(
-                role.role == ROLE_COMPLIANCE_DELEGATE,
-                MmfError::MissingRole
-            );
-            require!(
-                timelock.operation == TimeLockOperation::ForceBurn,
-                MmfError::TimelockMismatch
-            );
-            require!(
-                timelock.status == TimeLockStatus::Accepted,
-                MmfError::TimelockNotReady
-            );
+    require!(role.role == ROLE_COMPLIANCE_DELEGATE, MmfError::MissingRole);
+    require!(
+        timelock.operation == TimeLockOperation::ForceBurn,
+        MmfError::TimelockMismatch
+    );
+    require!(
+        timelock.status == TimeLockStatus::Accepted,
+        MmfError::TimelockNotReady
+    );
 
-            let now = Clock::get()?.unix_timestamp;
-            require!(
-                now >= timelock.timestamp + TIMELOCK_FORCE_ACTION,
-                MmfError::TimelockNotReady
-            );
+    let now = Clock::get()?.unix_timestamp;
+    require!(
+        now >= timelock.timestamp + TIMELOCK_FORCE_ACTION,
+        MmfError::TimelockNotReady
+    );
 
-            // Bind execution to the accepted proposal: the source ATA and amount must match what was approved.
-            let expected =
-                TimeLock::encode_force_burn(&ctx.accounts.from_ata.key(), amount);
-            timelock.verify_action_data(&expected)?;
+    // Bind execution to the accepted proposal: the source ATA and amount must
+    // match what was approved.
+    let expected = TimeLock::encode_force_burn(&ctx.accounts.from_ata.key(), amount);
+    timelock.verify_action_data(&expected)?;
 
-            timelock.status = TimeLockStatus::Executed;
-            timelock.executer = Some(ctx.accounts.delegate.key());
-        }
-        None => {
-            // Emergency path: no timelock, requires emergency role
-            require!(
-                role.role == ROLE_EMERGENCY,
-                MmfError::EmergencyRoleRequired
-            );
-        }
-    }
+    timelock.status = TimeLockStatus::Executed;
+    timelock.executer = Some(ctx.accounts.delegate.key());
 
     let bump = [ctx.accounts.config.bump];
     let signer_seeds: &[&[&[u8]]] = &[&[CONFIG_SEED, &bump]];
@@ -122,9 +105,7 @@ pub fn handler(ctx: Context<ForceBurn>, amount: u64) -> Result<()> {
         ctx.accounts.from_ata.key()
     );
 
-    // Durable audit record of the seizure (see `events::AssetSeizure`),
-    // emitted on both the timelocked and the emergency path.
-    let timelock = ctx.accounts.timelock.as_ref().map(|tl| tl.key());
+    // Durable audit record of the seizure (see `events::AssetSeizure`).
     emit_cpi!(AssetSeizure {
         mint: ctx.accounts.mint.key(),
         from_ata: ctx.accounts.from_ata.key(),
@@ -132,8 +113,7 @@ pub fn handler(ctx: Context<ForceBurn>, amount: u64) -> Result<()> {
         amount,
         kind: SeizureKind::Burn,
         authority: ctx.accounts.delegate.key(),
-        emergency: timelock.is_none(),
-        timelock,
+        timelock: ctx.accounts.timelock.key(),
         timestamp: Clock::get()?.unix_timestamp,
     });
     Ok(())

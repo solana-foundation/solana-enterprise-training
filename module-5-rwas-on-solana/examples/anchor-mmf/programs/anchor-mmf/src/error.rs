@@ -18,8 +18,6 @@ pub enum MmfError {
     TimelockAlreadyFinalized,
     #[msg("Responder cannot be the same entity as the proposer")]
     TimelockSelfResponse,
-    #[msg("Emergency role required when bypassing timelock")]
-    EmergencyRoleRequired,
     #[msg("Execution parameters do not match the accepted timelock proposal")]
     TimelockActionMismatch,
 }

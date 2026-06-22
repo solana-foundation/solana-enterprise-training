@@ -9,7 +9,7 @@ use crate::{
     error::MmfError,
     state::{
         Config, Role, TimeLock, TimeLockOperation, TimeLockStatus,
-        ROLE_EMERGENCY, ROLE_MINTER,
+        ROLE_MINTER,
     },
 };
 
@@ -20,15 +20,12 @@ use crate::{
 ///
 /// On Solana, phases 1 and 2 are handled by the generic timelock
 /// instructions (`create_timelock_proposal` with `Burn` operation,
-/// then `respond_timelock_proposal`). This instruction is phase 3:
-/// it validates the timelock, checks the delay, and executes the burn.
-///
-/// **Normal path** — `timelock` is `Some`. Requires `ROLE_MINTER` and
-/// an accepted timelock with `TIMELOCK_BURN` delay elapsed. The holder
-/// must also sign, authorizing the redemption.
-///
-/// **Emergency path** — `timelock` is `None`. Requires `ROLE_EMERGENCY`.
-/// Used for operational scenarios where a burn must happen immediately
+/// then `respond_timelock_proposal`). 
+/// 
+/// This instruction is phase 3: it validates the timelock, checks the delay,
+/// and executes the burn. Requires `ROLE_MINTER` and an accepted timelock with
+/// the `TIMELOCK_BURN` delay elapsed, and the holder must also sign to
+/// authorize the redemption. There is no emergency bypass.
 #[derive(Accounts)]
 pub struct BurnMmf<'info> {
     pub minter: Signer<'info>,
@@ -51,7 +48,7 @@ pub struct BurnMmf<'info> {
     pub role: Account<'info, Role>,
 
     #[account(mut)]
-    pub timelock: Option<Account<'info, TimeLock>>,
+    pub timelock: Account<'info, TimeLock>,
 
     #[account(mut)]
     pub mint: InterfaceAccount<'info, Mint>,
@@ -70,41 +67,31 @@ pub fn handler(ctx: Context<BurnMmf>, amount: u64) -> Result<()> {
     require!(amount > 0, MmfError::ZeroAmount);
 
     let role = &ctx.accounts.role;
+    let timelock = &mut ctx.accounts.timelock;
 
-    match &mut ctx.accounts.timelock {
-        Some(timelock) => {
-            require!(role.role == ROLE_MINTER, MmfError::MissingRole);
-            require!(
-                timelock.operation == TimeLockOperation::Burn,
-                MmfError::TimelockMismatch
-            );
-            require!(
-                timelock.status == TimeLockStatus::Accepted,
-                MmfError::TimelockNotReady
-            );
+    require!(role.role == ROLE_MINTER, MmfError::MissingRole);
+    require!(
+        timelock.operation == TimeLockOperation::Burn,
+        MmfError::TimelockMismatch
+    );
+    require!(
+        timelock.status == TimeLockStatus::Accepted,
+        MmfError::TimelockNotReady
+    );
 
-            let now = Clock::get()?.unix_timestamp;
-            require!(
-                now >= timelock.timestamp + TIMELOCK_BURN,
-                MmfError::TimelockNotReady
-            );
+    let now = Clock::get()?.unix_timestamp;
+    require!(
+        now >= timelock.timestamp + TIMELOCK_BURN,
+        MmfError::TimelockNotReady
+    );
 
-            // Bind execution to the accepted proposal: the holder ATA and
-            // amount must match what was approved.
-            let expected =
-                TimeLock::encode_burn(&ctx.accounts.holder_ata.key(), amount);
-            timelock.verify_action_data(&expected)?;
+    // Bind execution to the accepted proposal: the holder ATA and amount must
+    // match what was approved.
+    let expected = TimeLock::encode_burn(&ctx.accounts.holder_ata.key(), amount);
+    timelock.verify_action_data(&expected)?;
 
-            timelock.status = TimeLockStatus::Executed;
-            timelock.executer = Some(ctx.accounts.minter.key());
-        }
-        None => {
-            require!(
-                role.role == ROLE_EMERGENCY,
-                MmfError::EmergencyRoleRequired
-            );
-        }
-    }
+    timelock.status = TimeLockStatus::Executed;
+    timelock.executer = Some(ctx.accounts.minter.key());
 
     let cpi = CpiContext::new(
         ctx.accounts.token_program.key(),

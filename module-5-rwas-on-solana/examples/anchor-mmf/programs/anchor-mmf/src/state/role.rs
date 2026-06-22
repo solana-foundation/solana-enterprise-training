@@ -37,22 +37,9 @@ pub const ROLE_COMPLIANCE_DELEGATE: [u8; 32] = *b"MMF__COMPLIANCE_DELEGATE_ROLE_
 /// maker/checker model, the responder is always a different entity
 /// than the proposer. Typically held by the compliance officer or a
 /// dedicated approval multisig.
+///
+/// There is no emergency / break-glass role: every timelockable action goes
+/// through the maker/checker timelock, with no no-delay bypass. Urgency is
+/// handled out of band by freezing the affected account first, after
+/// which the on-chain action is never time-critical.
 pub const ROLE_RESPONDER: [u8; 32] = *b"MMF__RESPONDER_ROLE_____________";
-/// Emergency — the break-glass role. Holding it alone authorizes the
-/// emergency (no-timelock) path of every timelockable action: in a single
-/// signature it skips the delay, the maker/checker second party, and the
-/// action-data binding.
-///
-/// It is deliberately **full root**: the emergency path checks only for
-/// ROLE_EMERGENCY and does **not** additionally require the action's
-/// functional role (you do not also need ROLE_PAUSER to emergency-pause,
-/// or ROLE_COMPLIANCE_DELEGATE to emergency-seize). This is what lets a
-/// single break-glass authority pause, seize, or burn in the same block
-/// during an active incident, when waiting for a delay or a second
-/// transaction would let the harm complete.
-///
-/// Because it is unconstrained, it must be held exclusively by a
-/// custodian-co-signed multisig. Dual-control for the break-glass lives in
-/// that signer (e.g. a Squads 2-of-N co-signing the one tx), not in the
-/// program flow — which keeps the action atomic and immediate.
-pub const ROLE_EMERGENCY: [u8; 32] = *b"MMF__EMERGENCY_ROLE_____________";

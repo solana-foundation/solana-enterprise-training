@@ -8,18 +8,15 @@ use crate::{
     error::MmfError,
     state::{
         Config, Role, TimeLock, TimeLockOperation, TimeLockStatus,
-        ROLE_EMERGENCY, ROLE_PAUSER,
+        ROLE_PAUSER,
     },
 };
 
-/// Pause or resume the mint at the Token-2022 protocol level. Two paths:
-///
-/// **Normal path** — `timelock` is `Some`. Requires `ROLE_PAUSER` and
-/// an accepted timelock with `TIMELOCK_PAUSE` delay elapsed.
-///
-/// **Emergency path** — `timelock` is `None`. Requires `ROLE_EMERGENCY`.
-/// This is the critical path: during an active exploit you need to pause
-/// transfers in the same block, not wait 6 hours.
+/// Pause or resume the mint at the Token-2022 protocol level. Always
+/// timelocked: requires `ROLE_PAUSER` and an accepted maker/checker proposal
+/// with the `TIMELOCK_PAUSE` delay elapsed. There is no emergency bypass - a
+/// single holder is stopped instantly by freezing their account, and a
+/// mint-wide halt goes through the same governance as any other state change.
 ///
 /// This drives the Token-2022 **Pausable** extension via a CPI signed by the
 /// Config PDA (the mint's pause authority). When paused, Token-2022 itself
@@ -49,7 +46,7 @@ pub struct SetPaused<'info> {
     pub role: Account<'info, Role>,
 
     #[account(mut)]
-    pub timelock: Option<Account<'info, TimeLock>>,
+    pub timelock: Account<'info, TimeLock>,
 
     #[account(mut)]
     pub mint: InterfaceAccount<'info, Mint>,
@@ -59,39 +56,30 @@ pub struct SetPaused<'info> {
 
 pub fn handler(ctx: Context<SetPaused>, paused: bool) -> Result<()> {
     let role = &ctx.accounts.role;
+    let timelock = &mut ctx.accounts.timelock;
 
-    match &mut ctx.accounts.timelock {
-        Some(timelock) => {
-            require!(role.role == ROLE_PAUSER, MmfError::MissingRole);
-            require!(
-                timelock.operation == TimeLockOperation::Pause,
-                MmfError::TimelockMismatch
-            );
-            require!(
-                timelock.status == TimeLockStatus::Accepted,
-                MmfError::TimelockNotReady
-            );
+    require!(role.role == ROLE_PAUSER, MmfError::MissingRole);
+    require!(
+        timelock.operation == TimeLockOperation::Pause,
+        MmfError::TimelockMismatch
+    );
+    require!(
+        timelock.status == TimeLockStatus::Accepted,
+        MmfError::TimelockNotReady
+    );
 
-            let now = Clock::get()?.unix_timestamp;
-            require!(
-                now >= timelock.timestamp + TIMELOCK_PAUSE,
-                MmfError::TimelockNotReady
-            );
+    let now = Clock::get()?.unix_timestamp;
+    require!(
+        now >= timelock.timestamp + TIMELOCK_PAUSE,
+        MmfError::TimelockNotReady
+    );
 
-            // Bind execution to the accepted proposal: the target pause state
-            // must match what was approved.
-            timelock.verify_action_data(&TimeLock::encode_pause(paused))?;
+    // Bind execution to the accepted proposal: the target pause state must
+    // match what was approved.
+    timelock.verify_action_data(&TimeLock::encode_pause(paused))?;
 
-            timelock.status = TimeLockStatus::Executed;
-            timelock.executer = Some(ctx.accounts.pauser.key());
-        }
-        None => {
-            require!(
-                role.role == ROLE_EMERGENCY,
-                MmfError::EmergencyRoleRequired
-            );
-        }
-    }
+    timelock.status = TimeLockStatus::Executed;
+    timelock.executer = Some(ctx.accounts.pauser.key());
 
     // Drive the Token-2022 Pausable extension, signed by the Config PDA (the mint's pause authority).
     let bump = [ctx.accounts.config.bump];

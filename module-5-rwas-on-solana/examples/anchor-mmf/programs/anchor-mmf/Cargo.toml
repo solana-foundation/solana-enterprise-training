@@ -35,6 +35,8 @@ solana-account = "3.2"
 # `curve25519` enables off-chain `Address::find_program_address`. This is the
 # same `Address` type litesvm exposes, so no pubkey conversions are needed.
 solana-address = { version = "2.6", features = ["curve25519"] }
+# Clock sysvar manipulation, to fast-forward past timelock delays in the test.
+solana-clock = "3.0"
 sha2 = "0.10"
 
 
