@@ -97,9 +97,7 @@ Defined in `mmf_admin::state::role`:
 **No emergency role.** Every privileged action goes through the maker/checker
 timelock - there is no break-glass key that bypasses the delay or the second
 signer. Urgency is handled out of band: a single bad holder is stopped
-instantly by **freezing** the account (gate block-list / Token ACL freeze, a
-one-signature client action), after which the on-chain force/burn/pause is
-never time-critical and can take the normal governed path.
+instantly by **freezing** the account, after which the on-chain force/burn/pause is never time-critical and can take the normal governed path.
 
 **Genesis roles.** Because every timelocked action needs two distinct keys (a
 proposer with the action's role + a responder), a clean slate cannot bootstrap
