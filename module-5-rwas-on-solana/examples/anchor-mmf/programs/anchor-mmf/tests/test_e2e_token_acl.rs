@@ -8,7 +8,11 @@
 //!      Token ACL `thaw_permissionless` (gated by the ABL allow list);
 //!   2. `mint_mmf` succeeds once the ATA is thawed;
 //!   3. a transfer within the rate-limit cap succeeds and one over the cap is
-//!      rejected by the transfer hook with `RateLimitExceeded`.
+//!      rejected by the transfer hook with `RateLimitExceeded`;
+//!   4. `force_transfer` through the maker/checker timelock bypasses the rate
+//!      limit (a seizure is never throttled);
+//!   5. an immediate, role-gated pause blocks all movement, and resume restores it;
+//!   6. a client-side Token ACL freeze of a holder blocks transfers into it.
 //!
 //! All instructions are hand-built with `solana_instruction` so the test does
 //! not depend on any program's generated client. Anchor instruction
@@ -16,10 +20,10 @@
 //!
 //! No role accounts are injected: `initialize` seeds the genesis roles (the
 //! admin gets the operator roles, a second `responder` key gets
-//! `ROLE_RESPONDER`). The pause and force-transfer paths are then exercised
-//! through the real maker/checker timelock - propose, respond with the
-//! distinct responder, fast-forward past the delay, execute - with no
-//! emergency bypass.
+//! `ROLE_RESPONDER`). `force_transfer` runs the real maker/checker timelock
+//! (propose, respond with the distinct responder, fast-forward past the delay,
+//! execute); pause is immediate; and freezing a holder is a client-side Token
+//! ACL call, since `mmf_admin` has no freeze instruction.
 
 use litesvm::LiteSVM;
 use sha2::{Digest, Sha256};
@@ -51,12 +55,10 @@ const ROLE_RESPONDER: [u8; 32] = *b"MMF__RESPONDER_ROLE_____________";
 const DECIMALS: u8 = 4;
 const RATE_CAP: u64 = 1_000_000;
 
-// Per-operation timelock delays (see anchor-mmf constants.rs).
-const TIMELOCK_PAUSE: i64 = 6 * 60 * 60;
+// Force actions are timelocked (see anchor-mmf constants.rs); pause is not.
 const TIMELOCK_FORCE_ACTION: i64 = 24 * 60 * 60;
 
-// TimeLockOperation borsh discriminants.
-const OP_PAUSE: u8 = 1;
+// TimeLockOperation borsh discriminant for ForceTransfer.
 const OP_FORCE_TRANSFER: u8 = 5;
 
 // ---- small helpers ---------------------------------------------------------
@@ -297,14 +299,13 @@ fn warp(svm: &mut LiteSVM, seconds: i64) {
     svm.expire_blockhash();
 }
 
-/// mmf_admin `set_paused` - executes an accepted Pause proposal. Drives the
-/// Token-2022 Pausable extension.
+/// mmf_admin `set_paused` - immediate, role-gated (ROLE_PAUSER), no timelock.
+/// Drives the Token-2022 Pausable extension.
 fn set_paused(
     admin: &Address,
     config: &Address,
     pauser_role: &Address,
     mint: &Address,
-    timelock: &Address,
     paused: bool,
 ) -> Instruction {
     let mut data = ix_disc("set_paused").to_vec();
@@ -315,11 +316,30 @@ fn set_paused(
             AccountMeta::new(*admin, true),                 // pauser
             AccountMeta::new(*config, false),               // config (mut)
             AccountMeta::new_readonly(*pauser_role, false), // role (PAUSER)
-            AccountMeta::new(*timelock, false),             // timelock (mut)
             AccountMeta::new(*mint, false),                 // mint (mut)
             AccountMeta::new_readonly(TOKEN_2022, false),
         ],
         data,
+    }
+}
+
+/// Token ACL authority `Freeze` (disc 5) - the **client-side** compliance
+/// freeze of a holder's token account. `mmf_admin` has no freeze instruction:
+/// the mint's freeze authority was delegated to the Token ACL `MintConfig`, and
+/// the recorded authority (here, `admin`) drives freeze/thaw directly. This
+/// CPIs Token-2022 `FreezeAccount` signed by the `MintConfig` PDA.
+fn freeze_via_token_acl(admin: &Address, mint: &Address, token_account: &Address) -> Instruction {
+    let mint_config = pda(&[b"MINT_CONFIG", mint.as_ref()], &TOKEN_ACL).0;
+    Instruction {
+        program_id: TOKEN_ACL,
+        accounts: vec![
+            AccountMeta::new_readonly(*admin, true), // authority (MintConfig.freeze_authority)
+            AccountMeta::new_readonly(*mint, false),
+            AccountMeta::new(*token_account, false),
+            AccountMeta::new_readonly(mint_config, false),
+            AccountMeta::new_readonly(TOKEN_2022, false),
+        ],
+        data: vec![5],
     }
 }
 
@@ -637,30 +657,11 @@ fn token_acl_end_to_end() {
         "force transfer should move tokens despite the cap"
     );
 
-    // 11. Pause through the timelock (#1): the Token-2022 Pausable extension
-    //     makes pause a real circuit breaker - the protocol rejects all
-    //     movement. No emergency bypass: propose -> respond -> wait -> execute.
-    let pause_seed = 2u64;
-    let pause_proposal = proposal_pda(&admin.pubkey(), pause_seed);
-    send(
-        &mut svm,
-        &[create_proposal(&admin.pubkey(), &admin_pauser, pause_seed, OP_PAUSE, &[1])],
-        &admin.pubkey(),
-        &[&admin],
-    )
-    .expect("propose pause");
-    send(&mut svm, &[respond(&responder.pubkey(), &responder_role, &pause_proposal)], &responder.pubkey(), &[&responder])
-        .expect("respond pause");
-    warp(&mut svm, TIMELOCK_PAUSE + 1);
-    send(
-        &mut svm,
-        &[set_paused(&admin.pubkey(), &config, &admin_pauser, &mint, &pause_proposal, true)],
-        &admin.pubkey(),
-        &[&admin],
-    )
-    .expect("pause");
-
-    // A normal transfer is now blocked at the protocol level.
+    // 11. Pause is immediate (role-gated, no timelock): it's the circuit
+    //     breaker. Pause -> a transfer is blocked at the protocol level ->
+    //     resume -> a transfer goes through again.
+    send(&mut svm, &[set_paused(&admin.pubkey(), &config, &admin_pauser, &mint, true)], &admin.pubkey(), &[&admin])
+        .expect("pause");
     let b_before = token_amount(&svm, &b_ata);
     let paused_try = send(
         &mut svm,
@@ -670,4 +671,33 @@ fn token_acl_end_to_end() {
     );
     assert!(paused_try.is_err(), "transfers must fail while paused");
     assert_eq!(token_amount(&svm, &b_ata), b_before, "paused transfer must not move tokens");
+
+    send(&mut svm, &[set_paused(&admin.pubkey(), &config, &admin_pauser, &mint, false)], &admin.pubkey(), &[&admin])
+        .expect("resume");
+    send(
+        &mut svm,
+        &[transfer_checked(&mint, &holder_a.pubkey(), &a_ata, &b_ata, 60_000)],
+        &holder_a.pubkey(),
+        &[&holder_a],
+    )
+    .expect("transfer after resume");
+    assert_eq!(token_amount(&svm, &b_ata), b_before + 60_000, "resumed transfer should move tokens");
+
+    // 12. Compliance freeze of a holder - a CLIENT-SIDE action, not an
+    //     mmf_admin instruction. The mint's freeze authority is the Token ACL
+    //     `MintConfig`; the recorded authority (admin) drives Token ACL's
+    //     `Freeze`. Freezing B's account then blocks any transfer into it.
+    send(&mut svm, &[freeze_via_token_acl(&admin.pubkey(), &mint, &b_ata)], &admin.pubkey(), &[&admin])
+        .expect("freeze holder B via Token ACL");
+    assert_eq!(token_state(&svm, &b_ata), 2, "B's account should be frozen");
+
+    let b_frozen_balance = token_amount(&svm, &b_ata);
+    let frozen_try = send(
+        &mut svm,
+        &[transfer_checked(&mint, &holder_a.pubkey(), &a_ata, &b_ata, 10_000)],
+        &holder_a.pubkey(),
+        &[&holder_a],
+    );
+    assert!(frozen_try.is_err(), "transfer into a frozen account must fail");
+    assert_eq!(token_amount(&svm, &b_ata), b_frozen_balance, "frozen account must not change");
 }

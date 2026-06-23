@@ -4,27 +4,25 @@ use anchor_spl::token_interface::{Mint, TokenInterface};
 use anchor_spl::token_2022::spl_token_2022::extension::pausable::instruction as pausable_instruction;
 
 use crate::{
-    constants::{CONFIG_SEED, ROLE_SEED, TIMELOCK_PAUSE},
+    constants::{CONFIG_SEED, ROLE_SEED},
     error::MmfError,
-    state::{
-        Config, Role, TimeLock, TimeLockOperation, TimeLockStatus,
-        ROLE_PAUSER,
-    },
+    state::{Config, Role, ROLE_PAUSER},
 };
 
-/// Pause or resume the mint at the Token-2022 protocol level. Always
-/// timelocked: requires `ROLE_PAUSER` and an accepted maker/checker proposal
-/// with the `TIMELOCK_PAUSE` delay elapsed. There is no emergency bypass - a
-/// single holder is stopped instantly by freezing their account, and a
-/// mint-wide halt goes through the same governance as any other state change.
+/// Pause or resume the mint at the Token-2022 protocol level. **Immediate** and
+/// role-gated: requires `ROLE_PAUSER`, with no timelock. Pause is the circuit
+/// breaker - during an active incident you need to halt the mint in the same
+/// block, not wait out a governance delay - so it is the one privileged action
+/// that bypasses the maker/checker timelock. The dual-control comes from the
+/// `ROLE_PAUSER` key being a multisig.
 ///
 /// This drives the Token-2022 **Pausable** extension via a CPI signed by the
 /// Config PDA (the mint's pause authority). When paused, Token-2022 itself
 /// rejects every transfer, mint, and burn of the mint - including
 /// permanent-delegate moves, so `force_transfer` / `force_burn` are also
-/// halted. To seize during an incident, resume, act, then re-pause. Thawing
-/// (owned by the external Token ACL) is unaffected. The pause state is read
-/// from the mint's Pausable extension - this program keeps no mirror of it.
+/// halted. Thawing (owned by the external Token ACL) is unaffected. The pause
+/// state is read from the mint's Pausable extension - this program keeps no
+/// mirror of it.
 #[derive(Accounts)]
 pub struct SetPaused<'info> {
     pub pauser: Signer<'info>,
@@ -46,40 +44,13 @@ pub struct SetPaused<'info> {
     pub role: Account<'info, Role>,
 
     #[account(mut)]
-    pub timelock: Account<'info, TimeLock>,
-
-    #[account(mut)]
     pub mint: InterfaceAccount<'info, Mint>,
 
     pub token_program: Interface<'info, TokenInterface>,
 }
 
 pub fn handler(ctx: Context<SetPaused>, paused: bool) -> Result<()> {
-    let role = &ctx.accounts.role;
-    let timelock = &mut ctx.accounts.timelock;
-
-    require!(role.role == ROLE_PAUSER, MmfError::MissingRole);
-    require!(
-        timelock.operation == TimeLockOperation::Pause,
-        MmfError::TimelockMismatch
-    );
-    require!(
-        timelock.status == TimeLockStatus::Accepted,
-        MmfError::TimelockNotReady
-    );
-
-    let now = Clock::get()?.unix_timestamp;
-    require!(
-        now >= timelock.timestamp + TIMELOCK_PAUSE,
-        MmfError::TimelockNotReady
-    );
-
-    // Bind execution to the accepted proposal: the target pause state must
-    // match what was approved.
-    timelock.verify_action_data(&TimeLock::encode_pause(paused))?;
-
-    timelock.status = TimeLockStatus::Executed;
-    timelock.executer = Some(ctx.accounts.pauser.key());
+    require!(ctx.accounts.role.role == ROLE_PAUSER, MmfError::MissingRole);
 
     // Drive the Token-2022 Pausable extension, signed by the Config PDA (the mint's pause authority).
     let bump = [ctx.accounts.config.bump];

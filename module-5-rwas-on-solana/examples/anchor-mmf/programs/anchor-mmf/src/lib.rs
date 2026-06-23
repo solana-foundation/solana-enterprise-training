@@ -112,9 +112,10 @@ pub mod mmf_admin {
     /*  **** Pause (timelockable) **** */
 
     /// Pause or resume the mint via its Token-2022 Pausable extension.
-    /// Requires `ROLE_PAUSER` + an accepted timelock (no emergency bypass).
+    /// Immediate and role-gated: requires `ROLE_PAUSER`, no timelock - pause
+    /// is the circuit breaker and must take effect in the same block.
     ///
-    /// Maps to `PausableFacetTimelockable`.
+    /// Maps to `PausableFacet`.
     pub fn set_paused(ctx: Context<SetPaused>, paused: bool) -> Result<()> {
         instructions::pause::handler(ctx, paused)
     }
