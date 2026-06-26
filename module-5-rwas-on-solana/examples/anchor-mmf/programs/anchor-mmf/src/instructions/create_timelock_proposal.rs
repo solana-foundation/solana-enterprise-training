@@ -70,10 +70,12 @@ pub fn handler(
         TimeLockOperation::ForceBurn | TimeLockOperation::ForceTransfer => {
             ROLE_COMPLIANCE_DELEGATE
         }
-        // SetRole and OwnershipTransfer are admin-gated — any granted
-        // role satisfies the PDA constraint; the execute handler will
-        // additionally check Config.admin.
-        TimeLockOperation::SetRole | TimeLockOperation::OwnershipTransfer => role.role,
+        // SetRole, OwnershipTransfer, UpdateDelays are admin-gated - any
+        // granted role satisfies the PDA constraint; the execute handler
+        // additionally checks Config.admin.
+        TimeLockOperation::SetRole
+        | TimeLockOperation::OwnershipTransfer
+        | TimeLockOperation::UpdateDelays => role.role,
     };
 
     require!(role.role == expected_role, MmfError::MissingRole);

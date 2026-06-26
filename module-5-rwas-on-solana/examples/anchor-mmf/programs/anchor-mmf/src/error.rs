@@ -20,4 +20,8 @@ pub enum MmfError {
     TimelockSelfResponse,
     #[msg("Execution parameters do not match the accepted timelock proposal")]
     TimelockActionMismatch,
+    #[msg("Timelock delay is outside the allowed range")]
+    InvalidTimelockDelay,
+    #[msg("Timelock readiness timestamp overflowed")]
+    TimelockOverflow,
 }

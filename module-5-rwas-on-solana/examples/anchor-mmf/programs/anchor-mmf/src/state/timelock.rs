@@ -46,6 +46,7 @@ pub enum TimeLockOperation {
     ForceBurn,
     ForceTransfer,
     OwnershipTransfer,
+    UpdateDelays,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq)]
@@ -114,6 +115,25 @@ impl TimeLock {
         v
     }
 
+    /// `UpdateDelays`: 5 x `i64` little-endian = 40 bytes. Field order matches
+    /// `state::TimelockDelays`: set_role, force_action, burn, ownership_transfer,
+    /// update_delays.
+    pub fn encode_update_delays(
+        set_role: i64,
+        force_action: i64,
+        burn: i64,
+        ownership_transfer: i64,
+        update_delays: i64,
+    ) -> Vec<u8> {
+        let mut v = Vec::with_capacity(40);
+        v.extend_from_slice(&set_role.to_le_bytes());
+        v.extend_from_slice(&force_action.to_le_bytes());
+        v.extend_from_slice(&burn.to_le_bytes());
+        v.extend_from_slice(&ownership_transfer.to_le_bytes());
+        v.extend_from_slice(&update_delays.to_le_bytes());
+        v
+    }
+
     /// Expected `action_data` byte length for a given operation. Used at
     /// proposal creation as a cheap sanity gate so a malformed proposal can
     /// never be accepted or executed.
@@ -124,6 +144,7 @@ impl TimeLock {
             TimeLockOperation::Pause => 1,
             TimeLockOperation::SetRole => 65,
             TimeLockOperation::OwnershipTransfer => 32,
+            TimeLockOperation::UpdateDelays => 40,
         }
     }
 

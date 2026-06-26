@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-    constants::{ANCHOR_DISCRIMINATOR_SIZE, CONFIG_SEED, ROLE_SEED, TIMELOCK_SET_ROLE},
+    constants::{ANCHOR_DISCRIMINATOR_SIZE, CONFIG_SEED, ROLE_SEED},
     error::MmfError,
     state::{Config, Role, TimeLock, TimeLockOperation, TimeLockStatus},
 };
@@ -62,10 +62,11 @@ pub fn handler(ctx: Context<SetRole>, role: [u8; 32], granted: bool) -> Result<(
     );
 
     let now = Clock::get()?.unix_timestamp;
-    require!(
-        now >= timelock.timestamp + TIMELOCK_SET_ROLE,
-        MmfError::TimelockNotReady
-    );
+    let ready_at = timelock
+        .timestamp
+        .checked_add(ctx.accounts.config.delays.set_role)
+        .ok_or(MmfError::TimelockOverflow)?;
+    require!(now >= ready_at, MmfError::TimelockNotReady);
 
     // Bind execution to the accepted proposal: the role, grantee, and
     // grant/revoke direction must match what was approved.

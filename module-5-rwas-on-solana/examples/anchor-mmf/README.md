@@ -77,6 +77,8 @@ that exposes one address with many facets.
 | `MintBurnFacet` | `mint_mmf` / `burn_mmf` ix |
 | Account freeze (block a holder) | **client-side** Token ACL `Freeze` / ABL block list (freeze authority lives in Token ACL, not this program) |
 | Implicit operator authority | `force_transfer` / `force_burn` ix (timelocked), backed by the mint's `PermanentDelegate` extension |
+| Daily NAV accrual | `update_nav_rate` ix -> mint's `InterestBearingMint` extension (signed i16 basis-point rate) |
+| Timelock governance | `create_timelock_proposal` / `respond_timelock_proposal` / `cancel_timelock_proposal`; delays live on `Config.delays`, re-tuned via `update_timelock_delays` (itself timelocked) |
 | `diamondCut` upgradeability | BPF upgrade authority on both programs (e.g. a Squads multisig) |
 
 The `Config.version` field lets off-chain services reconcile on-chain state
@@ -94,6 +96,10 @@ Defined in `mmf_admin::state::role`:
   `AssetSeizure` audit event via `emit_cpi!`, so the action leaves a durable,
   indexable record.
 - `ROLE_RESPONDER` — approves/rejects timelock proposals (maker/checker).
+- `ROLE_RATE_AUTHORITY` — writes the InterestBearingMint extension's NAV rate
+  via `update_nav_rate`. Held by the fund administrator (Anchorage / Apex /
+  in-house TA). Separate from the admin so daily NAV posts don't traverse the
+  multisig.
 
 **Two speeds, no break-glass role.** The privileged actions split by how
 time-critical they are:
@@ -113,9 +119,10 @@ There is no emergency/break-glass role that bypasses a timelock.
 proposer with the action's role + a responder), a clean slate cannot bootstrap
 itself. So `initialize` seeds an operable starting set directly: the deployer
 receives the operator roles (`ROLE_MINTER`, `ROLE_PAUSER`,
-`ROLE_COMPLIANCE_DELEGATE`) and a second `responder` key receives
-`ROLE_RESPONDER`. In production the admin should hand each operator role to a
-dedicated key and revoke its own, via the normal timelocked `set_role`.
+`ROLE_COMPLIANCE_DELEGATE`, `ROLE_RATE_AUTHORITY`) and a second `responder`
+key receives `ROLE_RESPONDER`. In production the admin should hand each
+operator role to a dedicated key and revoke its own, via the normal
+timelocked `set_role`.
 
 Compliance allow/block listing is **not** a role here — it lives in the external
 ABL gate program, whose list authority is set client-side at bootstrap.
@@ -188,6 +195,7 @@ programs/
 │   │   │   ├── role.rs
 │   │   │   └── timelock.rs
 │   │   ├── instructions.rs    # module root
+│   │   ├── events.rs
 │   │   └── instructions/
 │   │       ├── initialize.rs
 │   │       ├── set_role.rs
@@ -196,8 +204,11 @@ programs/
 │   │       ├── burn_mmf.rs
 │   │       ├── force_transfer.rs
 │   │       ├── force_burn.rs
+│   │       ├── update_nav_rate.rs
+│   │       ├── update_timelock_delays.rs
 │   │       ├── create_timelock_proposal.rs
-│   │       └── respond_timelock_proposal.rs
+│   │       ├── respond_timelock_proposal.rs
+│   │       └── cancel_timelock_proposal.rs
 │   └── tests/
 │       ├── test_initialize.rs        # compile-time smoke test
 │       ├── test_e2e_token_acl.rs     # litesvm end-to-end flow

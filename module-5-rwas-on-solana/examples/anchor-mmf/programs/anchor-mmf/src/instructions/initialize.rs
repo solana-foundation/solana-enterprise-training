@@ -18,10 +18,14 @@ use anchor_spl::{
 };
 
 use crate::{
-    constants::{ANCHOR_DISCRIMINATOR_SIZE, CONFIG_SEED, MMF_DECIMALS, ROLE_SEED},
+    constants::{
+        ANCHOR_DISCRIMINATOR_SIZE, CONFIG_SEED, DEFAULT_TIMELOCK_BURN,
+        DEFAULT_TIMELOCK_FORCE_ACTION, DEFAULT_TIMELOCK_OWNERSHIP_TRANSFER,
+        DEFAULT_TIMELOCK_SET_ROLE, DEFAULT_TIMELOCK_UPDATE_DELAYS, MMF_DECIMALS, ROLE_SEED,
+    },
     state::{
-        Config, Role, ROLE_COMPLIANCE_DELEGATE, ROLE_MINTER, ROLE_PAUSER, ROLE_RATE_AUTHORITY,
-        ROLE_RESPONDER,
+        Config, Role, TimelockDelays, ROLE_COMPLIANCE_DELEGATE, ROLE_MINTER, ROLE_PAUSER,
+        ROLE_RATE_AUTHORITY, ROLE_RESPONDER,
     },
 };
 
@@ -256,6 +260,13 @@ pub fn handler(ctx: Context<Initialize>) -> Result<()> {
         admin: ctx.accounts.admin.key(),
         mint: ctx.accounts.mint.key(),
         version: 1,
+        delays: TimelockDelays {
+            set_role: DEFAULT_TIMELOCK_SET_ROLE,
+            force_action: DEFAULT_TIMELOCK_FORCE_ACTION,
+            burn: DEFAULT_TIMELOCK_BURN,
+            ownership_transfer: DEFAULT_TIMELOCK_OWNERSHIP_TRANSFER,
+            update_delays: DEFAULT_TIMELOCK_UPDATE_DELAYS,
+        },
         bump: ctx.bumps.config,
     });
 

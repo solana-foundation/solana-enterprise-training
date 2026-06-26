@@ -5,7 +5,7 @@ use anchor_spl::{
 };
 
 use crate::{
-    constants::{CONFIG_SEED, ROLE_SEED, TIMELOCK_BURN},
+    constants::{CONFIG_SEED, ROLE_SEED},
     error::MmfError,
     state::{
         Config, Role, TimeLock, TimeLockOperation, TimeLockStatus,
@@ -80,10 +80,11 @@ pub fn handler(ctx: Context<BurnMmf>, amount: u64) -> Result<()> {
     );
 
     let now = Clock::get()?.unix_timestamp;
-    require!(
-        now >= timelock.timestamp + TIMELOCK_BURN,
-        MmfError::TimelockNotReady
-    );
+    let ready_at = timelock
+        .timestamp
+        .checked_add(ctx.accounts.config.delays.burn)
+        .ok_or(MmfError::TimelockOverflow)?;
+    require!(now >= ready_at, MmfError::TimelockNotReady);
 
     // Bind execution to the accepted proposal: the holder ATA and amount must
     // match what was approved.

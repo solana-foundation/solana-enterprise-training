@@ -187,4 +187,17 @@ pub mod mmf_admin {
     pub fn update_nav_rate(ctx: Context<UpdateNavRate>, new_rate_bps: i16) -> Result<()> {
         instructions::update_nav_rate::handler(ctx, new_rate_bps)
     }
+
+    /*  **** Governance (timelockable) **** */
+
+    /// Re-tune the per-operation timelock delays stored on `Config`. Admin-
+    /// gated and itself timelocked under `Config.delays.update_delays`. The
+    /// new delays are bounds-checked against `MIN_TIMELOCK_DELAY` and
+    /// `MAX_TIMELOCK_DELAY` before being applied.
+    pub fn update_timelock_delays(
+        ctx: Context<UpdateTimelockDelays>,
+        new_delays: TimelockDelays,
+    ) -> Result<()> {
+        instructions::update_timelock_delays::handler(ctx, new_delays)
+    }
 }

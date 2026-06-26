@@ -1,5 +1,7 @@
 use anchor_lang::prelude::*;
 
+use crate::state::TimelockDelays;
+
 /// Durable audit record for every operator-driven seizure - emitted by both
 /// `force_transfer` and `force_burn`.
 ///
@@ -77,5 +79,21 @@ pub struct TimelockProposalCancelled {
     /// proposer cancelling their own proposal.
     pub admin_override: bool,
     /// Block time at which the cancel landed.
+    pub timestamp: i64,
+}
+
+/// Durable audit record for a re-tuning of the per-operation timelock delays.
+/// Emitted with `emit_cpi!` so the reconciliation pipeline can detect when
+/// governance windows shifted and re-evaluate any in-flight proposals against
+/// the new bounds.
+#[event]
+pub struct TimelockDelaysUpdated {
+    /// Delays that were in force before this update.
+    pub previous_delays: TimelockDelays,
+    /// Delays that are in force after this update.
+    pub new_delays: TimelockDelays,
+    /// Program admin that executed the update (signer of the ix).
+    pub admin: Pubkey,
+    /// Block time at which the update landed.
     pub timestamp: i64,
 }

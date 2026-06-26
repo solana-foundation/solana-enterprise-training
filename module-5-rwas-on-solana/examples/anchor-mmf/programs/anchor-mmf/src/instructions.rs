@@ -9,6 +9,7 @@ pub mod initialize;
 pub mod mint_mmf;
 pub mod pause;
 pub mod update_nav_rate;
+pub mod update_timelock_delays;
 
 pub mod set_role;
 pub mod cancel_timelock_proposal;
@@ -22,6 +23,7 @@ pub use initialize::*;
 pub use mint_mmf::*;
 pub use pause::*;
 pub use update_nav_rate::*;
+pub use update_timelock_delays::*;
 pub use set_role::*;
 pub use cancel_timelock_proposal::*;
 pub use create_timelock_proposal::*;

@@ -7,7 +7,7 @@ use anchor_spl::{
 };
 
 use crate::{
-    constants::{CONFIG_SEED, ROLE_SEED, TIMELOCK_FORCE_ACTION},
+    constants::{CONFIG_SEED, ROLE_SEED},
     error::MmfError,
     events::{AssetSeizure, SeizureKind},
     state::{
@@ -103,10 +103,11 @@ pub fn handler(ctx: Context<ForceTransfer>, amount: u64) -> Result<()> {
     );
 
     let now = Clock::get()?.unix_timestamp;
-    require!(
-        now >= timelock.timestamp + TIMELOCK_FORCE_ACTION,
-        MmfError::TimelockNotReady
-    );
+    let ready_at = timelock
+        .timestamp
+        .checked_add(ctx.accounts.config.delays.force_action)
+        .ok_or(MmfError::TimelockOverflow)?;
+    require!(now >= ready_at, MmfError::TimelockNotReady);
 
     // Bind execution to the accepted proposal: the source ATA, destination
     // ATA, and amount must match what was approved.
