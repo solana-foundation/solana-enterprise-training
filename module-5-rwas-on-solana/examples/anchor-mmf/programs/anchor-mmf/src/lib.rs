@@ -169,4 +169,14 @@ pub mod mmf_admin {
     pub fn force_burn(ctx: Context<ForceBurn>, amount: u64) -> Result<()> {
         instructions::force_burn::handler(ctx, amount)
     }
+
+    /*  **** NAV (InterestBearingMint extension) **** */
+
+    /// Write the InterestBearingMint extension's signed basis-point rate.
+    /// Token-2022 applies the rate in `amount_to_ui_amount`, so the share
+    /// price accrues without rebasing balances - the same daily NAV pattern
+    /// BUIDL and FOBXX use. Requires `ROLE_RATE_AUTHORITY`; not timelocked.
+    pub fn update_nav_rate(ctx: Context<UpdateNavRate>, new_rate_bps: i16) -> Result<()> {
+        instructions::update_nav_rate::handler(ctx, new_rate_bps)
+    }
 }

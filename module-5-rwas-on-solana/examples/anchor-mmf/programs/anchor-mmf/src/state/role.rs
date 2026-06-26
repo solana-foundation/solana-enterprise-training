@@ -43,3 +43,9 @@ pub const ROLE_COMPLIANCE_DELEGATE: [u8; 32] = *b"MMF__COMPLIANCE_DELEGATE_ROLE_
 /// handled out of band by freezing the affected account first, after
 /// which the on-chain action is never time-critical.
 pub const ROLE_RESPONDER: [u8; 32] = *b"MMF__RESPONDER_ROLE_____________";
+/// Rate authority - signs `update_nav_rate`, which writes the InterestBearing
+/// extension's signed basis-point rate. Daily NAV is operational, not
+/// privileged: in production this should be the fund administrator
+/// (Anchorage / Apex / in-house TA), held separately from the admin so the
+/// multisig is not in the daily path.
+pub const ROLE_RATE_AUTHORITY: [u8; 32] = *b"MMF__RATE_AUTHORITY_ROLE________";

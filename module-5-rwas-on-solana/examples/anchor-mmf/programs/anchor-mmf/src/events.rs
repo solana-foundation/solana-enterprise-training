@@ -39,3 +39,25 @@ pub enum SeizureKind {
     Transfer,
     Burn,
 }
+
+/// Durable audit record for daily NAV writes. Emitted with `emit_cpi!` so
+/// the payload lands in inner-instruction data and an indexer can ingest it
+/// without scraping the truncatable log buffer.
+///
+/// The InterestBearingMint rate is what Token-2022 applies in
+/// `amount_to_ui_amount`, so the off-chain reconciliation pipeline reconstructs
+/// the daily share price from this event stream rather than reading the mint
+/// account every day.
+#[event]
+pub struct NavRateUpdated {
+    /// MMF mint whose InterestBearingMint extension was updated.
+    pub mint: Pubkey,
+    /// New rate in basis points, signed. Negative values represent a loss to
+    /// the fund and are allowed for end-of-life wind-down or unrealized
+    /// impairment scenarios.
+    pub new_rate_bps: i16,
+    /// Signer that posted the new rate - the rate authority.
+    pub authority: Pubkey,
+    /// Block time at which the new rate was written.
+    pub timestamp: i64,
+}

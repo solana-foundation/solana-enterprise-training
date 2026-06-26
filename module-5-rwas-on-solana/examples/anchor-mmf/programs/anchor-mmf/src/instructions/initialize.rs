@@ -3,7 +3,10 @@ use anchor_lang::solana_program::program::invoke;
 use anchor_lang::system_program::{create_account, CreateAccount};
 use anchor_spl::{
     token_2022::spl_token_2022::{
-        extension::{pausable::instruction as pausable_instruction, ExtensionType},
+        extension::{
+            interest_bearing_mint::instruction as ibm_instruction,
+            pausable::instruction as pausable_instruction, ExtensionType,
+        },
         state::AccountState,
         state::Mint as MintState,
     },
@@ -17,7 +20,8 @@ use anchor_spl::{
 use crate::{
     constants::{ANCHOR_DISCRIMINATOR_SIZE, CONFIG_SEED, MMF_DECIMALS, ROLE_SEED},
     state::{
-        Config, Role, ROLE_COMPLIANCE_DELEGATE, ROLE_MINTER, ROLE_PAUSER, ROLE_RESPONDER,
+        Config, Role, ROLE_COMPLIANCE_DELEGATE, ROLE_MINTER, ROLE_PAUSER, ROLE_RATE_AUTHORITY,
+        ROLE_RESPONDER,
     },
 };
 
@@ -73,6 +77,12 @@ pub struct Initialize<'info> {
     ///     Token-2022 itself rejects every transfer, mint, and burn of this
     ///     mint (including permanent-delegate moves). The pause authority is
     ///     the Config PDA, so only `set_paused` can flip it.
+    ///   * InterestBearingMint - daily NAV accrual. Token-2022 applies the
+    ///     signed basis-point rate inside `amount_to_ui_amount`, so the share
+    ///     price changes without rebasing balances (the same pattern BUIDL
+    ///     and FOBXX use). The rate authority is the Config PDA, so only
+    ///     `update_nav_rate` (gated by `ROLE_RATE_AUTHORITY`) can write it.
+    ///     The initial rate is 0.
     ///
     /// Freeze authority is set to `admin` rather than the Config PDA on
     /// purpose: gating is handled by the sRFC-37 Token ACL standard
@@ -119,6 +129,11 @@ pub struct Initialize<'info> {
         seeds = [ROLE_SEED, ROLE_RESPONDER.as_ref(), responder.key().as_ref()], bump,
     )]
     pub responder_role: Account<'info, Role>,
+    #[account(
+        init, payer = admin, space = ANCHOR_DISCRIMINATOR_SIZE + Role::INIT_SPACE,
+        seeds = [ROLE_SEED, ROLE_RATE_AUTHORITY.as_ref(), admin.key().as_ref()], bump,
+    )]
+    pub admin_rate_authority_role: Account<'info, Role>,
 
     /// CHECK: the sibling hook program. Only its address is read, we never
     /// CPI into it from here - Token-2022 does that on every transfer.
@@ -137,7 +152,7 @@ pub fn handler(ctx: Context<Initialize>) -> Result<()> {
     let token_program_ai = ctx.accounts.token_program.to_account_info();
     let mint_ai = ctx.accounts.mint.to_account_info();
 
-    // 1. Allocate the mint account with room for all four extensions. The
+    // 1. Allocate the mint account with room for all five extensions. The
     //    length must account for every extension up front - you cannot grow a
     //    mint to add an extension after `initialize_mint2`.
     let space = ExtensionType::try_calculate_account_len::<MintState>(&[
@@ -145,6 +160,7 @@ pub fn handler(ctx: Context<Initialize>) -> Result<()> {
         ExtensionType::PermanentDelegate,
         ExtensionType::DefaultAccountState,
         ExtensionType::Pausable,
+        ExtensionType::InterestBearingConfig,
     ])?;
     let lamports = Rent::get()?.minimum_balance(space);
 
@@ -206,6 +222,19 @@ pub fn handler(ctx: Context<Initialize>) -> Result<()> {
         &[token_program_ai.clone(), mint_ai.clone()],
     )?;
 
+    // InterestBearingMint - same shape as Pausable. Rate authority is the
+    // Config PDA so update_nav_rate can CPI here signed by Config seeds.
+    // Initial rate is 0; the rate authority writes the live value later.
+    invoke(
+        &ibm_instruction::initialize(
+            &token_program_id,
+            &mint_ai.key(),
+            Some(config_key),
+            0_i16,
+        )?,
+        &[token_program_ai.clone(), mint_ai.clone()],
+    )?;
+
     // 3. Initialize the mint. Mint authority is the Config PDA so issuance
     //    (`mint_mmf` / `burn_mmf` / `force_*`) routes through this program.
     //    Freeze authority is the admin: it is handed to the Token ACL
@@ -257,6 +286,12 @@ pub fn handler(ctx: Context<Initialize>) -> Result<()> {
         grantee: responder,
         granted: true,
         bump: ctx.bumps.responder_role,
+    });
+    ctx.accounts.admin_rate_authority_role.set_inner(Role {
+        role: ROLE_RATE_AUTHORITY,
+        grantee: admin,
+        granted: true,
+        bump: ctx.bumps.admin_rate_authority_role,
     });
 
     msg!(

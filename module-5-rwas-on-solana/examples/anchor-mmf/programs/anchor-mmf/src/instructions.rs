@@ -8,6 +8,7 @@ pub mod force_transfer;
 pub mod initialize;
 pub mod mint_mmf;
 pub mod pause;
+pub mod update_nav_rate;
 
 pub mod set_role;
 pub mod create_timelock_proposal;
@@ -19,6 +20,7 @@ pub use force_transfer::*;
 pub use initialize::*;
 pub use mint_mmf::*;
 pub use pause::*;
+pub use update_nav_rate::*;
 pub use set_role::*;
 pub use create_timelock_proposal::*;
 pub use respond_timelock_proposal::*;
