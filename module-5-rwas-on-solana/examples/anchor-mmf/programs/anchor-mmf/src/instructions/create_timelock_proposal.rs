@@ -5,14 +5,13 @@ use crate::{
     error::MmfError,
     state::{
         Role, TimeLock, TimeLockOperation, TimeLockStatus,
-        ROLE_COMPLIANCE_DELEGATE, ROLE_MINTER, ROLE_PAUSER,
+        ROLE_COMPLIANCE_DELEGATE, ROLE_MINTER,
     },
 };
 
 /// Create a timelock proposal for any timelockable operation.
 ///
 /// The proposer must hold the role appropriate for the operation:
-///   - `Pause`             → `ROLE_PAUSER`
 ///   - `SetRole`           → admin (checked via Config, not role PDA)
 ///   - `Burn`              → `ROLE_MINTER`
 ///   - `ForceBurn`         → `ROLE_COMPLIANCE_DELEGATE`
@@ -65,7 +64,6 @@ pub fn handler(
 
     // Verify the proposer's role matches the operation type.
     let expected_role = match operation {
-        TimeLockOperation::Pause => ROLE_PAUSER,
         TimeLockOperation::Burn | TimeLockOperation::Transfer => ROLE_MINTER,
         TimeLockOperation::ForceBurn | TimeLockOperation::ForceTransfer => {
             ROLE_COMPLIANCE_DELEGATE

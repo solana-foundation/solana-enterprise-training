@@ -58,8 +58,9 @@ const RATE_CAP: u64 = 1_000_000;
 // Force actions are timelocked (see anchor-mmf constants.rs); pause is not.
 const TIMELOCK_FORCE_ACTION: i64 = 24 * 60 * 60;
 
-// TimeLockOperation borsh discriminant for ForceTransfer.
-const OP_FORCE_TRANSFER: u8 = 5;
+// TimeLockOperation borsh discriminant for ForceTransfer
+// (enum order: SetRole, Transfer, Burn, ForceBurn, ForceTransfer, OwnershipTransfer).
+const OP_FORCE_TRANSFER: u8 = 4;
 
 // ---- small helpers ---------------------------------------------------------
 
