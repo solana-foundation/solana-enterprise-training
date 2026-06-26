@@ -61,3 +61,21 @@ pub struct NavRateUpdated {
     /// Block time at which the new rate was written.
     pub timestamp: i64,
 }
+
+/// Durable audit record for a cancelled timelock proposal. Emitted with
+/// `emit_cpi!` so an indexer can reliably attribute the cancel (proposer-
+/// initiated vs admin-override) without scraping the log buffer.
+#[event]
+pub struct TimelockProposalCancelled {
+    /// The cancelled `TimeLock` proposal PDA.
+    pub proposal: Pubkey,
+    /// Original proposer of the now-cancelled proposal.
+    pub proposer: Pubkey,
+    /// Signer that performed the cancel.
+    pub signer: Pubkey,
+    /// True if the cancel was the admin override path rather than the
+    /// proposer cancelling their own proposal.
+    pub admin_override: bool,
+    /// Block time at which the cancel landed.
+    pub timestamp: i64,
+}

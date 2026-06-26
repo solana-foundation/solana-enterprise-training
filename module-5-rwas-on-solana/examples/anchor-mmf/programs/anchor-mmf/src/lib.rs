@@ -98,6 +98,14 @@ pub mod mmf_admin {
         instructions::respond_timelock_proposal::handler(ctx)
     }
 
+    /// Cancel a pending or accepted timelock proposal. The proposer can
+    /// cancel any proposal they created; the admin can cancel any proposal
+    /// as an override path. Sets `status = Cancelled` and refunds rent to
+    /// the original proposer.
+    pub fn cancel_timelock_proposal(ctx: Context<CancelTimeLockProposal>) -> Result<()> {
+        instructions::cancel_timelock_proposal::handler(ctx)
+    }
+
     /*  **** Access control (timelockable) **** */
 
     /// Grant or revoke a role. Only the program admin can call this, and it

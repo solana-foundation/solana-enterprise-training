@@ -11,6 +11,7 @@ pub mod pause;
 pub mod update_nav_rate;
 
 pub mod set_role;
+pub mod cancel_timelock_proposal;
 pub mod create_timelock_proposal;
 pub mod respond_timelock_proposal;
 
@@ -22,5 +23,6 @@ pub use mint_mmf::*;
 pub use pause::*;
 pub use update_nav_rate::*;
 pub use set_role::*;
+pub use cancel_timelock_proposal::*;
 pub use create_timelock_proposal::*;
 pub use respond_timelock_proposal::*;
