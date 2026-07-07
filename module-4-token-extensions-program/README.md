@@ -11,7 +11,7 @@
 ## Topics Covered
 
 - Token Extensions Program architecture
-- Mint extensions: confidential transfer, transfer fees, closing mint, interest-bearing tokens, non-transferable tokens, permanent delegate, transfer hook, metadata pointer, metadata
+- Mint extensions: confidential balances, transfer fees, closing mint, interest-bearing tokens, non-transferable tokens, permanent delegate, transfer hook, metadata pointer, metadata, pausable, scaled UI amount
 - Account extensions: memo required on transfer, immutable ownership, default account state, CPI guard
 - Token ACL (Access Control List)
 - Token ACL architecture and freeze/thaw workflows
@@ -25,9 +25,17 @@
 
 ## 1. Token Extensions Program
 
-As more developers build on Solana, many find themselves needing to fork the Token Program to add functionality. While modifying and deploying a custom token program is technically simple, achieving adoption is not - wallets must trust the program, and wallets must support the program.
+### Why a second token program
 
-The **Token Extensions Program** (also known as Token-2022) solves this by adding functionality to the standard token program with minimal disruption to users, wallets, and dApps.
+Solana's original **Token Program (SPL Token)** is deliberately minimal: one canonical program, shared by the entire ecosystem, that does the few things every token needs - mint, transfer, burn, freeze - and nothing more. That minimalism is precisely why it became universal. Because there was a single shared implementation, wallets, explorers, and dApps could integrate it once and instantly support every token built on it. The trade-off is that the program is intentionally narrow and effectively immutable, so it cannot grow new capabilities like transfer fees, confidentiality, transfer hooks, or on-chain metadata.
+
+As more teams needed those capabilities, the only path was to **fork** the Token Program and deploy a custom variant. Forking is technically simple, but adoption is not: every wallet and integrator must individually trust and add support for each new program. The predictable result is fragmentation - many incompatible token programs, none with ecosystem-wide support, which undermines the very network effect that made the original program valuable.
+
+The **Token Extensions Program** (also known as **Token-2022**) resolves this tension. It is a single, canonical, audited program - one the ecosystem can trust and support once - that bakes in a curated set of optional **extensions**. Each mint opts in at creation time to only the extensions it needs, while every other tool still recognizes it as a standard token. This adds functionality with minimal disruption to users, wallets, and dApps, instead of forcing a fork and re-bootstrapping ecosystem trust from scratch.
+
+Two token programs therefore coexist on the network - the original Token Program and the Token Extensions Program - and every mint and token account is owned by one or the other. Token-2022 is positioned as the next generation of the SPL Token standard, aimed squarely at businesses with **compliance obligations**: it provides advanced, configurable controls - transfer fees, confidential amounts, permanent delegate, pausability, and more - with **no additional programs needed**.
+
+What makes this adoptable rather than merely aspirational is that Token-2022 is a strict **superset** of the original Token Program. The original mint and account fields keep their exact byte layout, and any new state is appended afterward using a TLV (Type-Length-Value) scheme (see Section 2). Because the original data is untouched, existing wallets and explorers keep reading these accounts unchanged - the new program earns ecosystem support without breaking the tooling that made the original program universal.
 
 ## 2. Mint and Account Compatibility
 
@@ -41,20 +49,26 @@ The Token Extensions Program is a **superset** of the original Token Program - i
 
 ## 3. Mint Extensions
 
-### Confidential Transfer
+### Confidential Balances
 
-Confidential Transfers hide the **amount** of tokens being transferred between accounts while keeping sender and receiver addresses publicly visible. This provides partial privacy focused solely on concealing the transaction value.
+**Confidential Balances** is a suite of Token-2022 extensions that hide token **amounts** on-chain while keeping account addresses publicly visible - partial privacy that conceals values, not participants. The suite spans confidential **transfers** (encrypted transfer amounts), confidential **mint and burn** (issuance and redemption without revealing quantities), and confidential **transfer fees** (fees that stay encrypted alongside the amounts they apply to). All three share the same cryptographic machinery, so once the transfer flow is understood the others follow.
 
-- Built on ZK proofs, specifically ElGamal encryption
-- The amount is encrypted with the receiver's public key or a derived shared secret
-- Only the corresponding private key (held by the receiver) can decrypt the amount
-- The SPL Token 2022 SDK contains helper functions for sending confidential transfers
+The core operation, a **confidential transfer**, hides the amount moved between two accounts while sender and receiver remain visible:
+
+- Built on zero-knowledge proofs - ElGamal encryption with Pedersen commitments plus range and equality proofs - so the network verifies a transfer is valid without ever seeing the amount
+- Amounts are encrypted under a per-account encryption key; only the holder's corresponding private key can decrypt them
+- An optional **auditor key**, designated by the issuer on the mint, can decrypt all amounts - enabling selective disclosure for regulatory compliance without making balances public
+- The SPL Token-2022 SDK contains helper functions for sending confidential transfers
+
+This is what the Mosaic stablecoin example in this module enables: holders get balance and amount privacy while the issuer retains audit capability. Module 8 (Privacy) covers the cryptography, the full instruction lifecycle, and the current Mainnet status of the standard in depth.
 
 ### Transfer Fees
 
 The Token Extensions Program enables charging a fee on every transfer without the friction of the original Token Program's approach (which required freezing and unfreezing accounts through a third party).
 
 With Token Extensions, fees are **withheld in the recipient account**, and a designated **withdraw withheld authority** can collect those tokens.
+
+Note that fees are taken **in the token itself** (units of the mint), not in SOL/lamports - the recipient receives the transfer amount minus the withheld fee.
 
 ### Closing Mint
 
@@ -83,15 +97,27 @@ The permanent delegate extension allows a mint creator to specify a permanent de
 
 ### Transfer Hook
 
-Transfer hooks give token creators additional control over how their token is transferred. The creator develops a program that implements the transfer hook interface and configures the token mint to use that program. The Token Extensions Program calls the hook program **after** the transfer logic executes.
+Transfer hooks give token creators additional control over how their token is transferred. The creator develops a program that implements the transfer hook interface and configures the token mint to use that program. The Token Extensions Program calls the hook program **after** the transfer logic executes - balances are already updated when the hook runs, so the hook observes the real post-transfer state and cannot be tricked by a half-applied transfer. If the hook errors, the whole transaction (including the transfer) is rolled back.
 
-**Primary use case:** Royalty enforcement on token transfers.
+**Primary use case:** Royalty enforcement on token transfers. This module's `anchor-transfer-hook` example uses a hook for per-holder rate limiting instead.
 
 ### Metadata Pointer and Metadata
 
 With the potential for multiple metadata programs, a mint could have several different accounts claiming to describe it. The **metadata pointer** extension allows the creator to designate an address as the canonical metadata source.
 
 The **metadata extension** allows the creator to include metadata directly in the mint account itself, without requiring an external metadata program. If a token has a metadata extension, the metadata pointer should reference the mint itself.
+
+### Pausable
+
+The pausable extension lets a designated **pause authority** halt all activity on the mint - transfers, minting, and burning - with a single transaction, and resume it just as quickly.
+
+**Use cases:** emergency circuit breaker during a security incident, regulatory hold, or coordinated migration. The Mosaic stablecoin example in this module demonstrates pause/resume end to end.
+
+### Scaled UI Amount
+
+The scaled UI amount extension applies an issuer-controlled **multiplier** to the amount displayed by wallets and explorers, without changing raw on-chain balances. Where interest-bearing tokens derive the display amount from a continuously compounding rate, scaled UI amount sets the factor directly.
+
+**Use cases:** share splits and rebasing-style instruments (e.g. a tokenized fund that distributes by adjusting the scale factor rather than minting). Like interest-bearing tokens, this is display-level only - programs always see raw amounts.
 
 ## 4. Account Extensions
 
@@ -173,9 +199,12 @@ Token ACL is the interaction of three programs:
 
 ---
 
-## Code Example
+## Code Examples
 
-See the [examples/](examples/) folder for reference code for this module.
+See the [examples/](examples/) folder for reference code for this module:
+
+- [mosaic-stablecoin](examples/mosaic-stablecoin/) - a compliance-ready stablecoin built with the Mosaic SDK: metadata, pausable, confidential balances, permanent delegate, and an sRFC-37 deny list (sanctions screening)
+- [anchor-transfer-hook](examples/anchor-transfer-hook/) - a Token-2022 transfer hook that enforces per-holder rate limits, with the pure logic unit-tested
 
 ## Challenge
 

@@ -10,7 +10,6 @@
  *   • DefaultAccountState (Frozen) - new accounts start frozen (blocklist mode)
  *   • ConfidentialBalances - encrypted balances for privacy
  *   • PermanentDelegate - authority can seize / force-transfer tokens
- *   • sRFC-37 (Token ACL + ABL) - on-chain blocklist enforcement
  *
  * Usage:
  *   npm run create-token

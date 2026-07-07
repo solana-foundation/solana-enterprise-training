@@ -1,26 +1,27 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::instruction::AccountMeta;
+use anchor_lang::solana_program::program::invoke_signed;
 use anchor_spl::{
-    token_2022::{transfer_checked, TransferChecked},
+    token_2022::spl_token_2022::instruction::transfer_checked as spl_transfer_checked,
     token_interface::{Mint, TokenAccount, TokenInterface},
 };
 
 use crate::{
     constants::{CONFIG_SEED, ROLE_SEED, TIMELOCK_FORCE_ACTION},
     error::MmfError,
+    events::{AssetSeizure, SeizureKind},
     state::{
         Config, Role, TimeLock, TimeLockOperation, TimeLockStatus,
-        ROLE_COMPLIANCE_DELEGATE, ROLE_EMERGENCY,
+        ROLE_COMPLIANCE_DELEGATE,
     },
 };
 
-/// Compliance-driven forced transfer. Two paths:
-///
-/// **Normal path** — `timelock` is `Some`. The delegate holds
-/// `ROLE_COMPLIANCE_DELEGATE`, the timelock must be `Accepted` with
-/// operation `ForceTransfer`, and the delay must have elapsed.
-///
-/// **Emergency path** — `timelock` is `None`. The delegate holds
-/// `ROLE_EMERGENCY`. No delay — used during active incidents.
+/// Compliance-driven forced transfer. Always timelocked: the delegate holds
+/// `ROLE_COMPLIANCE_DELEGATE`, the `timelock` must be `Accepted` with
+/// operation `ForceTransfer`, the delay must have elapsed, and the accepted
+/// source/destination/amount must match. There is no emergency bypass - to
+/// stop a holder immediately, freeze the account first, then run this through
+/// the normal maker/checker flow.
 ///
 /// On Ethereum the Diamond operator has implicit authority to move
 /// tokens — no dedicated facet needed. On Solana, Token-2022 doesn't
@@ -33,6 +34,7 @@ use crate::{
 /// `transfer_checked` fires the hook, which CPIs to
 /// `mmf_transfer_hook`. Splitting the hook into its own program
 /// makes re-entrancy impossible here.
+#[event_cpi]
 #[derive(Accounts)]
 pub struct ForceTransfer<'info> {
     pub delegate: Signer<'info>,
@@ -52,12 +54,11 @@ pub struct ForceTransfer<'info> {
     pub role: Account<'info, Role>,
 
     #[account(mut)]
-    pub timelock: Option<Account<'info, TimeLock>>,
+    pub timelock: Account<'info, TimeLock>,
 
     pub mint: InterfaceAccount<'info, Mint>,
 
-    /// Source ATA. *Any* holder ATA is accepted — the Config PDA is the
-    /// mint's permanent delegate.
+    /// Source ATA. *Any* holder ATA is accepted — the Config PDA is the mint's permanent delegate.
     #[account(mut, token::mint = mint)]
     pub from_ata: InterfaceAccount<'info, TokenAccount>,
 
@@ -65,70 +66,97 @@ pub struct ForceTransfer<'info> {
     pub to_ata: InterfaceAccount<'info, TokenAccount>,
 
     pub token_program: Interface<'info, TokenInterface>,
+
+    // --- Transfer-hook accounts --------------------------------------------
+    // `transfer_checked` fires the mint's transfer hook, so the hook's
+    // accounts must travel with this CPI. The hook (`mmf_transfer_hook`)
+    // detects that the authority is the permanent delegate and skips rate
+    // limiting, so a seizure is never throttled - but Token-2022 still
+    // resolves and passes these, so they must be present.
+    
+    /// CHECK: the mint's transfer hook program; Token-2022 invokes it.
+    pub transfer_hook_program: UncheckedAccount<'info>,
+    /// CHECK: hook ExtraAccountMetaList PDA (`["extra-account-metas", mint]`).
+    pub hook_extra_account_meta_list: UncheckedAccount<'info>,
+    /// CHECK: hook per-mint RateLimitConfig PDA.
+    pub hook_rate_config: UncheckedAccount<'info>,
+    /// CHECK: hook RateLimit PDA for the permanent delegate; not read (the
+    /// hook skips delegate transfers) but Token-2022 resolves the address.
+    #[account(mut)]
+    pub hook_rate_limit: UncheckedAccount<'info>,
 }
 
 pub fn handler(ctx: Context<ForceTransfer>, amount: u64) -> Result<()> {
     require!(amount > 0, MmfError::ZeroAmount);
 
     let role = &ctx.accounts.role;
+    let timelock = &mut ctx.accounts.timelock;
 
-    match &mut ctx.accounts.timelock {
-        Some(timelock) => {
-            if role.role != ROLE_EMERGENCY {
-                require!(
-                    role.role == ROLE_COMPLIANCE_DELEGATE,
-                    MmfError::MissingRole
-                );
-                require!(
-                    timelock.operation == TimeLockOperation::ForceTransfer,
-                    MmfError::TimelockMismatch
-                );
-                require!(
-                    timelock.status == TimeLockStatus::Accepted,
-                    MmfError::TimelockNotReady
-                );
+    require!(role.role == ROLE_COMPLIANCE_DELEGATE, MmfError::MissingRole);
+    require!(
+        timelock.operation == TimeLockOperation::ForceTransfer,
+        MmfError::TimelockMismatch
+    );
+    require!(
+        timelock.status == TimeLockStatus::Accepted,
+        MmfError::TimelockNotReady
+    );
 
-                let now = Clock::get()?.unix_timestamp;
-                require!(
-                    now >= timelock.timestamp + TIMELOCK_FORCE_ACTION,
-                    MmfError::TimelockNotReady
-                );
+    let now = Clock::get()?.unix_timestamp;
+    require!(
+        now >= timelock.timestamp + TIMELOCK_FORCE_ACTION,
+        MmfError::TimelockNotReady
+    );
 
-                // Bind execution to the accepted proposal: the source ATA,
-                // destination ATA, and amount must match what was approved.
-                let expected = TimeLock::encode_force_transfer(
-                    &ctx.accounts.from_ata.key(),
-                    &ctx.accounts.to_ata.key(),
-                    amount,
-                );
-                timelock.verify_action_data(&expected)?;
-            }
+    // Bind execution to the accepted proposal: the source ATA, destination
+    // ATA, and amount must match what was approved.
+    let expected = TimeLock::encode_force_transfer(
+        &ctx.accounts.from_ata.key(),
+        &ctx.accounts.to_ata.key(),
+        amount,
+    );
+    timelock.verify_action_data(&expected)?;
 
-            timelock.status = TimeLockStatus::Executed;
-            timelock.executer = Some(ctx.accounts.delegate.key());
-        }
-        None => {
-            require!(
-                role.role == ROLE_EMERGENCY,
-                MmfError::EmergencyRoleRequired
-            );
-        }
-    }
+    timelock.status = TimeLockStatus::Executed;
+    timelock.executer = Some(ctx.accounts.delegate.key());
 
     let bump = [ctx.accounts.config.bump];
     let signer_seeds: &[&[&[u8]]] = &[&[CONFIG_SEED, &bump]];
 
-    let cpi = CpiContext::new_with_signer(
-        ctx.accounts.token_program.key(),
-        TransferChecked {
-            from: ctx.accounts.from_ata.to_account_info(),
-            mint: ctx.accounts.mint.to_account_info(),
-            to: ctx.accounts.to_ata.to_account_info(),
-            authority: ctx.accounts.config.to_account_info(),
-        },
+    // Build `transfer_checked` by hand so we can append the transfer hook's
+    // resolved accounts in the order Token-2022 expects:
+    // [rate_config, rate_limit, hook_program, extra_account_meta_list]. The
+    // anchor `transfer_checked` wrapper only emits the four base accounts, so
+    // it cannot carry the hook accounts through the CPI.
+    let mut ix = spl_transfer_checked(
+        &ctx.accounts.token_program.key(),
+        &ctx.accounts.from_ata.key(),
+        &ctx.accounts.mint.key(),
+        &ctx.accounts.to_ata.key(),
+        &ctx.accounts.config.key(),
+        &[],
+        amount,
+        ctx.accounts.mint.decimals,
+    )?;
+    ix.accounts.push(AccountMeta::new_readonly(ctx.accounts.hook_rate_config.key(), false));
+    ix.accounts.push(AccountMeta::new(ctx.accounts.hook_rate_limit.key(), false));
+    ix.accounts.push(AccountMeta::new_readonly(ctx.accounts.transfer_hook_program.key(), false));
+    ix.accounts.push(AccountMeta::new_readonly(ctx.accounts.hook_extra_account_meta_list.key(), false));
+
+    invoke_signed(
+        &ix,
+        &[
+            ctx.accounts.from_ata.to_account_info(),
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.to_ata.to_account_info(),
+            ctx.accounts.config.to_account_info(),
+            ctx.accounts.hook_rate_config.to_account_info(),
+            ctx.accounts.hook_rate_limit.to_account_info(),
+            ctx.accounts.transfer_hook_program.to_account_info(),
+            ctx.accounts.hook_extra_account_meta_list.to_account_info(),
+        ],
         signer_seeds,
-    );
-    transfer_checked(cpi, amount, ctx.accounts.mint.decimals)?;
+    )?;
 
     msg!(
         "force-transferred {} units from {} to {}",
@@ -136,5 +164,18 @@ pub fn handler(ctx: Context<ForceTransfer>, amount: u64) -> Result<()> {
         ctx.accounts.from_ata.key(),
         ctx.accounts.to_ata.key()
     );
+
+    // Durable audit record of the seizure (see `events::AssetSeizure`).
+    emit_cpi!(AssetSeizure {
+        mint: ctx.accounts.mint.key(),
+        from_ata: ctx.accounts.from_ata.key(),
+        to_ata: Some(ctx.accounts.to_ata.key()),
+        amount,
+        kind: SeizureKind::Transfer,
+        authority: ctx.accounts.delegate.key(),
+        timelock: ctx.accounts.timelock.key(),
+        timestamp: Clock::get()?.unix_timestamp,
+    });
+
     Ok(())
 }

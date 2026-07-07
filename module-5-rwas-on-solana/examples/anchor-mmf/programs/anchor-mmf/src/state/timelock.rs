@@ -9,11 +9,10 @@ use crate::error::MmfError;
 ///   1. `create_timelock_proposal`  — proposer creates with operation + data
 ///   2. `respond_timelock_proposal` — responder (different entity) accepts
 ///   3. The target action handler (e.g. `force_burn`, `set_paused`) takes
-///      this PDA as `Option<Account<TimeLock>>` and validates status +
-///      delay before executing. On success it marks `Executed`.
-///
-/// Emergency path: the action handler receives `None` for the timelock
-/// account and validates `ROLE_EMERGENCY` instead — bypassing the delay.
+///      this PDA as a required `Account<TimeLock>` and validates status +
+///      delay + action-data binding before executing. On success it marks
+///      `Executed`. There is no bypass - every timelockable action goes
+///      through this flow.
 ///
 /// Seeds: `[seed.to_le_bytes(), proposer]` — the `seed: u64` is a
 /// caller-chosen nonce for uniqueness.
@@ -23,7 +22,8 @@ pub struct TimeLock {
     pub operation: TimeLockOperation,
     /// Serialized parameters for the action. Interpretation depends on
     /// `operation`. For example, `ForceBurn` stores `[from_ata(32), amount(8)]`,
-    /// `Pause` stores `[paused(1)]`, etc. Fixed size for predictable rent.
+    /// `SetRole` stores `[role(32), grantee(32), granted(1)]`, etc. Fixed size
+    /// for predictable rent.
     #[max_len(128)]
     pub action_data: Vec<u8>,
     pub proposer: Pubkey,
@@ -41,7 +41,6 @@ pub struct TimeLock {
 #[derive(InitSpace)]
 pub enum TimeLockOperation {
     SetRole,
-    Pause,
     Transfer,
     Burn,
     ForceBurn,
@@ -101,11 +100,6 @@ impl TimeLock {
         v
     }
 
-    /// `Pause`: `paused(1)` = 1 byte.
-    pub fn encode_pause(paused: bool) -> Vec<u8> {
-        vec![paused as u8]
-    }
-
     /// `SetRole`: `role(32) | grantee(32) | granted(1)` = 65 bytes.
     pub fn encode_set_role(role: &[u8; 32], grantee: &Pubkey, granted: bool) -> Vec<u8> {
         let mut v = Vec::with_capacity(65);
@@ -122,7 +116,6 @@ impl TimeLock {
         match operation {
             TimeLockOperation::ForceTransfer | TimeLockOperation::Transfer => 72,
             TimeLockOperation::ForceBurn | TimeLockOperation::Burn => 40,
-            TimeLockOperation::Pause => 1,
             TimeLockOperation::SetRole => 65,
             TimeLockOperation::OwnershipTransfer => 32,
         }
@@ -167,7 +160,6 @@ mod tests {
         );
         assert_eq!(TimeLock::encode_force_burn(&key(1), 100).len(), 40);
         assert_eq!(TimeLock::encode_burn(&key(1), 100).len(), 40);
-        assert_eq!(TimeLock::encode_pause(true).len(), 1);
         assert_eq!(TimeLock::encode_set_role(&[7u8; 32], &key(1), true).len(), 65);
     }
 
@@ -225,11 +217,7 @@ mod tests {
     }
 
     #[test]
-    fn pause_and_set_role_bindings() {
-        let tl = proposal(TimeLockOperation::Pause, TimeLock::encode_pause(true));
-        assert!(tl.verify_action_data(&TimeLock::encode_pause(true)).is_ok());
-        assert!(tl.verify_action_data(&TimeLock::encode_pause(false)).is_err());
-
+    fn set_role_binding() {
         let role = [5u8; 32];
         let grantee = key(4);
         let sr = proposal(

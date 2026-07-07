@@ -5,19 +5,18 @@ use crate::{
     error::MmfError,
     state::{
         Role, TimeLock, TimeLockOperation, TimeLockStatus,
-        ROLE_COMPLIANCE_DELEGATE, ROLE_MINTER, ROLE_PAUSER,
+        ROLE_COMPLIANCE_DELEGATE, ROLE_MINTER,
     },
 };
 
 /// Create a timelock proposal for any timelockable operation.
 ///
 /// The proposer must hold the role appropriate for the operation:
-///   - `Pause`          → `ROLE_PAUSER`
-///   - `SetRole`        → admin (checked via Config, not role PDA)
-///   - `Burn`           → `ROLE_MINTER`
-///   - `ForceBurn`      → `ROLE_COMPLIANCE_DELEGATE`
-///   - `ForceTransfer`  → `ROLE_COMPLIANCE_DELEGATE`
-///   - `Transfer`       → `ROLE_MINTER`
+///   - `SetRole`           → admin (checked via Config, not role PDA)
+///   - `Burn`              → `ROLE_MINTER`
+///   - `ForceBurn`         → `ROLE_COMPLIANCE_DELEGATE`
+///   - `ForceTransfer`     → `ROLE_COMPLIANCE_DELEGATE`
+///   - `Transfer`          → `ROLE_MINTER`
 ///   - `OwnershipTransfer` → admin (checked via Config)
 ///
 /// For admin-gated operations (`SetRole`, `OwnershipTransfer`), the
@@ -33,9 +32,8 @@ pub struct CreateTimeLockProposal<'info> {
     #[account(mut)]
     pub proposer: Signer<'info>,
 
-    /// The proposer's role PDA. Must match the expected role for the
-    /// operation type. For admin-only ops, this is still required to
-    /// exist but the handler additionally checks Config.admin.
+    /// The proposer's role PDA. Must match the expected role for the operation type.
+    /// For admin-only ops, this is still required to exist but the handler additionally checks Config.admin.
     #[account(
         seeds = [ROLE_SEED, role.role.as_ref(), proposer.key().as_ref()],
         bump = role.bump,
@@ -66,7 +64,6 @@ pub fn handler(
 
     // Verify the proposer's role matches the operation type.
     let expected_role = match operation {
-        TimeLockOperation::Pause => ROLE_PAUSER,
         TimeLockOperation::Burn | TimeLockOperation::Transfer => ROLE_MINTER,
         TimeLockOperation::ForceBurn | TimeLockOperation::ForceTransfer => {
             ROLE_COMPLIANCE_DELEGATE

@@ -3,18 +3,17 @@ use anchor_lang::prelude::*;
 use crate::{
     constants::{ANCHOR_DISCRIMINATOR_SIZE, CONFIG_SEED, ROLE_SEED, TIMELOCK_SET_ROLE},
     error::MmfError,
-    state::{Config, Role, TimeLock, TimeLockOperation, TimeLockStatus, ROLE_EMERGENCY},
+    state::{Config, Role, TimeLock, TimeLockOperation, TimeLockStatus},
 };
 
 /// Grant or revoke a role. Equivalent to `AccessControlFacetTimelockable`
 /// on the Ethereum Diamond.
 ///
-/// **Normal path** — `timelock` is `Some`. Only the program admin can
-/// propose role changes; the timelock must be `Accepted` with the
-/// `TIMELOCK_SET_ROLE` delay elapsed.
-///
-/// **Emergency path** — `timelock` is `None`. Requires the admin to
-/// also hold `ROLE_EMERGENCY`.
+/// Always timelocked: only the program admin can execute, and the `timelock`
+/// must be an `Accepted` `SetRole` proposal with the `TIMELOCK_SET_ROLE` delay
+/// elapsed and matching parameters. There is no emergency bypass - the initial
+/// roles are seeded by `initialize`, and every later change goes through the
+/// maker/checker timelock.
 ///
 /// The PDA is `init_if_needed` so a grantee can be revoked
 /// (`granted=false`) and re-granted later without paying rent twice.
@@ -45,61 +44,36 @@ pub struct SetRole<'info> {
     pub role_account: Account<'info, Role>,
 
     #[account(mut)]
-    pub timelock: Option<Account<'info, TimeLock>>,
-
-    /// Emergency role PDA for the admin. Only required when `timelock`
-    /// is `None` (emergency path). When `timelock` is `Some`, this
-    /// can be omitted.
-    pub emergency_role: Option<Account<'info, Role>>,
+    pub timelock: Account<'info, TimeLock>,
 
     pub system_program: Program<'info, System>,
 }
 
 pub fn handler(ctx: Context<SetRole>, role: [u8; 32], granted: bool) -> Result<()> {
-    match &mut ctx.accounts.timelock {
-        Some(timelock) => {
-            require!(
-                timelock.operation == TimeLockOperation::SetRole,
-                MmfError::TimelockMismatch
-            );
-            require!(
-                timelock.status == TimeLockStatus::Accepted,
-                MmfError::TimelockNotReady
-            );
+    let timelock = &mut ctx.accounts.timelock;
 
-            let now = Clock::get()?.unix_timestamp;
-            require!(
-                now >= timelock.timestamp + TIMELOCK_SET_ROLE,
-                MmfError::TimelockNotReady
-            );
+    require!(
+        timelock.operation == TimeLockOperation::SetRole,
+        MmfError::TimelockMismatch
+    );
+    require!(
+        timelock.status == TimeLockStatus::Accepted,
+        MmfError::TimelockNotReady
+    );
 
-            // Bind execution to the accepted proposal: the role, grantee, and
-            // grant/revoke direction must match what was approved.
-            let expected =
-                TimeLock::encode_set_role(&role, &ctx.accounts.grantee.key(), granted);
-            timelock.verify_action_data(&expected)?;
+    let now = Clock::get()?.unix_timestamp;
+    require!(
+        now >= timelock.timestamp + TIMELOCK_SET_ROLE,
+        MmfError::TimelockNotReady
+    );
 
-            timelock.status = TimeLockStatus::Executed;
-            timelock.executer = Some(ctx.accounts.admin.key());
-        }
-        None => {
-            // Emergency path: admin must also hold ROLE_EMERGENCY.
-            let emergency = ctx
-                .accounts
-                .emergency_role
-                .as_ref()
-                .ok_or(MmfError::EmergencyRoleRequired)?;
-            require!(
-                emergency.role == ROLE_EMERGENCY,
-                MmfError::EmergencyRoleRequired
-            );
-            require!(emergency.granted, MmfError::EmergencyRoleRequired);
-            require!(
-                emergency.grantee == ctx.accounts.admin.key(),
-                MmfError::EmergencyRoleRequired
-            );
-        }
-    }
+    // Bind execution to the accepted proposal: the role, grantee, and
+    // grant/revoke direction must match what was approved.
+    let expected = TimeLock::encode_set_role(&role, &ctx.accounts.grantee.key(), granted);
+    timelock.verify_action_data(&expected)?;
+
+    timelock.status = TimeLockStatus::Executed;
+    timelock.executer = Some(ctx.accounts.admin.key());
 
     ctx.accounts.role_account.set_inner(Role {
         role: role,

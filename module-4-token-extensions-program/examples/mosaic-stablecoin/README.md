@@ -10,9 +10,9 @@ This project shows enterprise compliance officers and engineering teams how Sola
 
 | Script | What it does | Compliance feature |
 |--------|-------------|-------------------|
-| `01-create-stablecoin.ts` | Creates a new stablecoin mint with all compliance extensions | Token creation with Metadata, Pausable, Confidential Balances, Permanent Delegate, sRFC-37 Blocklist |
+| `01-create-stablecoin.ts` | Creates a new stablecoin mint with all compliance extensions | Token creation with Metadata, Pausable, Confidential Balances, Permanent Delegate, sRFC-37 blocklist |
 | `02-mint-tokens.ts` | Mints tokens to a recipient wallet | Automatic ATA creation, sRFC-37 thaw handling |
-| `03-blocklist-address.ts` | Adds a wallet to the on-chain blocklist and freezes it | OFAC / sanctions screening - atomic blocklist + freeze |
+| `03-blocklist-address.ts` | Adds a wallet to the on-chain blocklist and freezes it | OFAC / sanctions screening - atomic blocklist add + freeze |
 | `04-force-transfer.ts` | Seizes tokens from any wallet without owner approval | Court-ordered asset seizure via Permanent Delegate |
 | `05-pause-token.ts` | Halts all token transfers globally | Emergency circuit breaker for incident response |
 | `06-inspect-token.ts` | Reads full on-chain state for audit | Compliance audit - all authorities and extensions visible |
@@ -30,10 +30,10 @@ This project shows enterprise compliance officers and engineering teams how Sola
 │  │  Templates   │  │  Management  │  │    Inspection       │    │
 │  │  (Stablecoin │  │  (Mint, Burn │  │    (Audit, Read     │    │
 │  │   Arcade,    │  │   Pause,     │  │     on-chain state) │    │
-│  │   Security)  │  │   Blocklist) │  │                     │    │
+│  │   Security)  │  │   Blocklist)  │  │                     │    │
 │  └──────────────┘  └──────────────┘  └────────────────────┘    │
 ├─────────────────────────────────────────────────────────────────┤
-│  Token ACL (sRFC-37)    │    ABL (Allowlist / Blocklist)        │
+│  Token ACL (sRFC-37)    │    ABL (Allow / Block lists)           │
 ├─────────────────────────────────────────────────────────────────┤
 │                  Solana Token-2022 Program                       │
 │  Metadata · Pausable · ConfidentialBalances · PermanentDelegate │
@@ -90,6 +90,10 @@ npm run blocklist
 #   → Set RECOVERY_WALLET in .env first
 npm run force-transfer
 
+# Step 4: Force-transfer (seize) tokens from the sanctioned wallet
+#   → Set RECOVERY_WALLET in .env first
+npm run force-transfer
+
 # Step 5: Pause all token operations
 npm run pause-token
 # Resume: npx tsx src/05-pause-token.ts resume
@@ -137,12 +141,12 @@ Token account balances are encrypted on-chain. Only the account owner (and the c
 
 This demo is designed to answer the question: *"Can Solana support the compliance controls we need for a regulated token?"*
 
-The answer is yes. Every control demonstrated here - blocklisting, asset seizure, emergency pause, confidential balances, authority management - is enforced at the **protocol level** by the Token-2022 program. These are not application-layer workarounds; they are native Solana primitives.
+The answer is yes. Every control demonstrated here - sanctions freezing, asset seizure, emergency pause, confidential balances, authority management - is enforced at the **protocol level** by the Token-2022 program. These are not application-layer workarounds; they are native Solana primitives.
 
 Key points for evaluation:
 
 - **All authorities are on-chain and auditable.** Run `inspect-token` to see exactly who controls what.
-- **Blocklist enforcement is atomic.** A single transaction adds to the list and freezes the account.
+- **Deny-list enforcement is atomic.** A single transaction adds to the list and freezes the account.
 - **Asset seizure requires no owner cooperation.** The Permanent Delegate can move tokens unilaterally.
 - **Emergency pause is instant and global.** One transaction halts all operations.
 - **Everything runs on Solana devnet today.** No custom programs needed - Mosaic uses standard Token-2022 extensions.

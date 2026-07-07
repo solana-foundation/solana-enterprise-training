@@ -17,16 +17,7 @@
  */
 
 import { createAddToBlocklistTransaction } from "@solana/mosaic-sdk";
-import {
-  signTransactionMessageWithSigners,
-  compileTransaction,
-  getBase64EncodedWireTransaction,
-  address,
-} from "@solana/kit";
-import { getRpc, loadAuthority, heading, explorerUrl } from "./helpers.js";
-
-// ── Configuration ─────────────────────────────────────────────────
-const MINT_ADDRESS = process.env.MINT_ADDRESS ?? "";
+	@@ -30,7 +38,7 @@ const MINT_ADDRESS = process.env.MINT_ADDRESS ?? "";
 const SANCTIONED_WALLET = process.env.SANCTIONED_WALLET ?? "";
 
 async function main() {
@@ -34,10 +25,7 @@ async function main() {
 
   if (!MINT_ADDRESS) throw new Error("Set MINT_ADDRESS in .env");
   if (!SANCTIONED_WALLET) throw new Error("Set SANCTIONED_WALLET in .env");
-
-  const rpc = getRpc();
-  const authority = await loadAuthority();
-
+	@@ -41,12 +49,12 @@ async function main() {
   console.log("  Mint             :", MINT_ADDRESS);
   console.log("  Sanctioned wallet:", SANCTIONED_WALLET);
   console.log();
@@ -50,16 +38,7 @@ async function main() {
   //   2. Freezes their token account via Token ACL
   const tx = await createAddToBlocklistTransaction(
     rpc,
-    address(MINT_ADDRESS),
-    address(SANCTIONED_WALLET),
-    authority,   // freeze authority / list authority
-  );
-
-  // Sign and send
-  console.log("  Signing and sending...");
-  const signedTx = await signTransactionMessageWithSigners(tx);
-  const wireTransaction = getBase64EncodedWireTransaction(compileTransaction(signedTx));
-  const signature = await rpc
+	@@ -63,11 +71,11 @@ async function main() {
     .sendTransaction(wireTransaction, { encoding: "base64" })
     .send();
 

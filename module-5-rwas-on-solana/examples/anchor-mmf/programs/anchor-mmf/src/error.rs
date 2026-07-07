@@ -6,8 +6,6 @@ pub enum MmfError {
     NotAdmin,
     #[msg("Signer does not hold the required role")]
     MissingRole,
-    #[msg("Program is paused — transfers and issuance are disabled")]
-    Paused,
     #[msg("Provided mint does not match the mint recorded in Config")]
     MintMismatch,
     #[msg("Amount must be greater than zero")]
@@ -20,8 +18,6 @@ pub enum MmfError {
     TimelockAlreadyFinalized,
     #[msg("Responder cannot be the same entity as the proposer")]
     TimelockSelfResponse,
-    #[msg("Emergency role required when bypassing timelock")]
-    EmergencyRoleRequired,
     #[msg("Execution parameters do not match the accepted timelock proposal")]
     TimelockActionMismatch,
 }

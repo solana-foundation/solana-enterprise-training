@@ -1,7 +1,6 @@
 //! # MMF Admin Program
 //!
-//! Solana-native analogue of the MMF ERC-2535 Diamond deployed on Ethereum
-//! at `0x6a7c6aa2b8b8a6a891de552bdeffa87c3f53bd46`.
+//! Solana-native analogue of the MMF ERC-2535 Diamond deployed on Ethereum.
 //!
 //! Where the Ethereum implementation uses EIP-2535 (Diamond) to give the issuer a
 //! single, upgradeable contract address backed by many facets, on Solana we
@@ -9,7 +8,8 @@
 //! instruction dispatch. This program owns **all** state that backs the MMF
 //! token:
 //!
-//! * `Config`    — program admin, pause flag, mint pubkey, version.
+//! * `Config`    — program admin, mint pubkey, version. (Pause state lives in
+//!                 the mint's Token-2022 Pausable extension, not here.)
 //! * `Role`      — one PDA per (role, pubkey), modelling OpenZeppelin-style
 //!                 role-based access control.
 //! * `TimeLock`  — generic timelock proposal PDA backing the
@@ -47,12 +47,14 @@
 
 pub mod constants;
 pub mod error;
+pub mod events;
 pub mod instructions;
 pub mod state;
 
 use anchor_lang::prelude::*;
 
 pub use constants::*;
+pub use events::*;
 pub use instructions::*;
 pub use state::*;
 
@@ -65,8 +67,10 @@ pub mod mmf_admin {
     /*  **** Bootstrap **** */
 
     /// One-time bootstrap. Creates the `Config` PDA, initializes the MMF
-    /// Token-2022 mint with transfer hook + permanent delegate, and seeds
-    /// the program admin.
+    /// Token-2022 mint (transfer hook, permanent delegate, default-frozen,
+    /// pausable), and seeds the genesis roles: the deployer gets the operator
+    /// roles and a second `responder` key gets `ROLE_RESPONDER`, so the
+    /// maker/checker timelock is operable from block one.
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         instructions::initialize::handler(ctx)
     }
@@ -96,9 +100,9 @@ pub mod mmf_admin {
 
     /*  **** Access control (timelockable) **** */
 
-    /// Grant or revoke a role. Only the program admin can call this.
-    /// Normal path requires an accepted timelock; emergency path
-    /// requires `ROLE_EMERGENCY`.
+    /// Grant or revoke a role. Only the program admin can call this, and it
+    /// always requires an accepted maker/checker timelock (no emergency
+    /// bypass). The initial roles are seeded by `initialize`.
     ///
     /// Maps to `AccessControlFacetTimelockable`.
     pub fn set_role(ctx: Context<SetRole>, role: [u8; 32], granted: bool) -> Result<()> {
@@ -107,10 +111,11 @@ pub mod mmf_admin {
 
     /*  **** Pause (timelockable) **** */
 
-    /// Toggle the global pause flag. Normal path requires `ROLE_PAUSER`
-    /// + timelock; emergency path requires `ROLE_EMERGENCY`.
+    /// Pause or resume the mint via its Token-2022 Pausable extension.
+    /// Immediate and role-gated: requires `ROLE_PAUSER`, no timelock - pause
+    /// is the circuit breaker and must take effect in the same block.
     ///
-    /// Maps to `PausableFacetTimelockable`.
+    /// Maps to `PausableFacet`.
     pub fn set_paused(ctx: Context<SetPaused>, paused: bool) -> Result<()> {
         instructions::pause::handler(ctx, paused)
     }
@@ -136,8 +141,8 @@ pub mod mmf_admin {
 
     /// Burn MMF from a holder's ATA as part of a redemption flow.
     /// Three-phase lifecycle: propose → respond → execute (this ix).
-    /// Normal path requires `ROLE_MINTER` + timelock; emergency path
-    /// requires `ROLE_EMERGENCY`.
+    /// Requires `ROLE_MINTER` + an accepted timelock and the holder's
+    /// signature (no emergency bypass).
     ///
     /// Maps to `BurnPreparableFacet` → `BurnRespondableFacet` →
     /// `BurnableFacet`.
@@ -147,17 +152,17 @@ pub mod mmf_admin {
 
     /*  **** Force actions (timelockable, PermanentDelegate) **** */
 
-    /// Compliance-driven forced transfer from any holder ATA. Normal
-    /// path requires `ROLE_COMPLIANCE_DELEGATE` + timelock; emergency
-    /// path requires `ROLE_EMERGENCY`.
+    /// Compliance-driven forced transfer from any holder ATA. Requires
+    /// `ROLE_COMPLIANCE_DELEGATE` + an accepted timelock (no emergency
+    /// bypass). Emits an `AssetSeizure` audit event.
     ///
     /// Maps to `ManagedAccountFacet` (implicit operator authority on EVM).
     pub fn force_transfer(ctx: Context<ForceTransfer>, amount: u64) -> Result<()> {
         instructions::force_transfer::handler(ctx, amount)
     }
 
-    /// Compliance-driven forced burn from any holder ATA. Same
-    /// timelock/emergency pattern as `force_transfer`.
+    /// Compliance-driven forced burn from any holder ATA. Same timelocked
+    /// maker/checker pattern as `force_transfer`; emits `AssetSeizure`.
     ///
     /// Maps to `ManagedTokenFacetTimelockable` (implicit operator
     /// authority on EVM).

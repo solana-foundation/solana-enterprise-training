@@ -8,4 +8,6 @@ pub enum ErrorCode {
     RateLimitExceeded,
     #[msg("Invalid mint account")]
     InvalidMint,
+    #[msg("Transfer hook invoked outside of an active transfer")]
+    NotTransferring,
 }

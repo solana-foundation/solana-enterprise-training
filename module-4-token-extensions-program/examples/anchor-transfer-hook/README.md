@@ -21,7 +21,7 @@ pub struct RateLimit {
     pub authority: Pubkey,
     pub mint: Pubkey,
     pub max_amount: u64,
-    pub last_updated: i64,
+    pub window_start: i64,
     pub amount_transferred: u64,
 }
 ```
@@ -30,11 +30,11 @@ pub struct RateLimit {
 
 - authority: The public key of the account that initialized (and controls) this rate limit.
 - mint: The public key of the token mint this rate limit applies to.
-- max_amount: The maximum cumulative amount that can be transferred within a single rate limit period.
-- last_updated: The Unix timestamp of the last transfer or reset, used to determine when the window expires.
-- amount_transferred: The cumulative amount transferred so far within the current rate limit period.
+- max_amount: The maximum cumulative amount that can be transferred within a single window.
+- window_start: The Unix timestamp at which the current window opened, used to determine when the window expires.
+- amount_transferred: The cumulative amount transferred so far within the current window.
 
-The rate limit resets automatically when more than 3600 seconds (1 hour) have elapsed since `last_updated`.
+The rate limit uses a **fixed window**: `window_start` is set when the window opens and is never moved by transfers. Once more than 3600 seconds (1 hour) have elapsed since `window_start`, the next transfer opens a fresh window with a zeroed total. This is a deliberate design choice - if every transfer refreshed the timestamp instead (a sliding window keyed on "last activity"), a holder transferring at least once per hour would keep the window alive forever and their running total would never reset, permanently capping an active account.
 
 ---
 
@@ -115,7 +115,7 @@ pub fn handler(ctx: Context<Initialize>) -> Result<()> {
         authority: ctx.accounts.payer.key(),
         mint: ctx.accounts.mint.key(),
         max_amount: RateLimit::MAX_AMOUNT,
-        last_updated: Clock::get()?.unix_timestamp,
+        window_start: Clock::get()?.unix_timestamp,
         amount_transferred: 0,
     });
 
@@ -233,9 +233,9 @@ pub fn handler(ctx: Context<TransferHook>, amount: u64) -> Result<()> {
     check_is_transferring(&ctx)?;
 
     let current_time = Clock::get()?.unix_timestamp;
-    if current_time - ctx.accounts.rate_limit.last_updated > ONE_HOUR {
-        ctx.accounts.rate_limit.reset();
-        msg!("Rate limit has been reset due to expiration");
+    if ctx.accounts.rate_limit.is_expired(current_time, ONE_HOUR) {
+        ctx.accounts.rate_limit.reset(current_time);
+        msg!("Rate limit window expired - opening a new window");
     }
 
     match ctx.accounts.rate_limit.limit_exceeded(amount) {
@@ -253,7 +253,7 @@ pub fn handler(ctx: Context<TransferHook>, amount: u64) -> Result<()> {
 }
 ```
 
-In this implementation, we first verify that the hook is being called during an actual transfer operation by checking the `TransferHookAccount` extension's `transferring` flag. Then we check if the rate limit period has expired (more than 1 hour since the last update) - if so, we reset the counter. Finally, we validate whether the cumulative transferred amount plus the current transfer would exceed the maximum. If it would, we reject the transfer with a `RateLimitExceeded` error; otherwise, we update the rate limit account and allow the transfer to proceed.
+In this implementation, we first verify that the hook is being called during an actual transfer operation by checking the `TransferHookAccount` extension's `transferring` flag. Then we check if the current window has expired (more than 1 hour since `window_start`) - if so, we open a fresh window with a zeroed total. Finally, we validate whether the cumulative transferred amount plus the current transfer would exceed the maximum, using saturating arithmetic so a huge `amount` cannot wrap around `u64` and sneak under the cap. If the limit would be exceeded, we reject the transfer with a `RateLimitExceeded` error; otherwise, we record the amount against the window (without touching `window_start`) and allow the transfer to proceed.
 
 The `check_is_transferring` function reads the source token account's data to inspect the `TransferHookAccount` extension:
 
@@ -264,16 +264,17 @@ fn check_is_transferring(ctx: &Context<TransferHook>) -> Result<()> {
     let account = PodStateWithExtensions::<PodAccount>::unpack(*account_data_ref)?;
     let account_extension = account.get_extension::<TransferHookAccount>()?;
 
-    if !bool::from(account_extension.transferring) {
-        panic!("TransferHook: Not transferring");
-    }
+    require!(
+        bool::from(account_extension.transferring),
+        ErrorCode::NotTransferring
+    );
 
     Ok(())
 }
 ```
 
-This ensures the transfer hook can only be executed as part of a Token-2022 transfer, preventing direct invocation.
+This ensures the transfer hook can only be executed as part of a Token-2022 transfer, preventing direct invocation. Note that we return a proper Anchor error (`NotTransferring`) rather than panicking - a panic aborts the program with an opaque SBF error, while an Anchor error surfaces a clear error code and message to the client.
 
 ---
 
-This rate limit transfer hook provides an automatic throttling mechanism for Token 2022 mints, ensuring that no single user can transfer more than a configured maximum amount within a rolling time window - all enforced on-chain without requiring additional user intervention.
+This rate limit transfer hook provides an automatic throttling mechanism for Token 2022 mints, ensuring that no single user can transfer more than a configured maximum amount within a fixed time window - all enforced on-chain without requiring additional user intervention.

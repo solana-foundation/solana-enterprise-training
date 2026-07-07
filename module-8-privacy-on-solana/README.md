@@ -5,13 +5,14 @@
 By the end of this module, participants will be able to:
 
 - Articulate why full on-chain transparency is a liability for institutional use cases and how it enables MEV, front-running, and competitive exposure
-- Describe Solana's three-layer privacy stack: Token-2022 Confidential Transfers, Contra payment channels, and Solana Permissioned Environments
+- Describe Solana's privacy stack: Token-2022 Confidential Balances and Private Channels
 - Explain the cryptographic primitives behind Confidential Transfers - ElGamal encryption, Pedersen commitments, and zero-knowledge range proofs
 - Walk through the 8-instruction Confidential Transfer lifecycle from mint creation to withdrawal
 - Differentiate between public and encrypted balance states in a confidential token account
 - Describe how the auditor key pattern enables selective disclosure for regulatory compliance without sacrificing privacy
-- Explain Contra's architecture - escrow-based deposits, private sequencing, and 100ms settlement batches
-- Compare Solana Mainnet with Solana Permissioned Environments across governance, visibility, validator sets, and fee models
+- Explain the Private Channels architecture - escrow-based deposits, private sequencing, and 100ms settlement batches
+- Compare Solana Mainnet with Private Channels across governance, visibility, validator sets, and fee models
+- Distinguish confidential computation (Arcium's MPC, Light Protocol's ZK compression) from amount-hiding, and match privacy trust models - ZK proofs, MPC, TEEs - to institutional risk requirements
 
 ## Topics Covered
 
@@ -21,11 +22,11 @@ By the end of this module, participants will be able to:
 - Confidential Transfer instruction flow
 - Confidential token account state model
 - Selective disclosure and the auditor key pattern
-- Contra private payment channels
-- Contra architecture and transaction pipeline
-- Contra in practice - banking use case
-- Solana Permissioned Environments (SPEs)
-- SPE vs Mainnet comparison
+- Private Channels payment channels
+- Private Channels architecture and transaction pipeline
+- Private Channels in practice - banking use case
+- Private Channels vs Mainnet comparison
+- The wider privacy ecosystem - confidential computation (Arcium, Light Protocol)
 
 ## Slides
 
@@ -37,35 +38,33 @@ By the end of this module, participants will be able to:
 
 Solana's default model is full transparency - every balance, transfer, and counterparty is publicly visible on-chain. For retail DeFi users this is acceptable. For institutions, it is a serious liability across three dimensions.
 
-**MEV and front-running.** Mempool visibility enables adversarial ordering, sandwich attacks, and value extraction from predictable flows. A large treasury movement or trading strategy becomes exploitable the moment it hits the network.
+**MEV and front-running.** Solana has no public mempool, but transactions are still visible to the leader that orders them, and predictable on-chain flows can be observed and exploited - adversarial ordering, sandwich attacks, and value extraction routed through block-builder/bundle auctions (e.g. Jito). A large treasury movement or trading strategy becomes exploitable the moment it is submitted, even without a gossiped mempool.
 
 **Competitive exposure.** Competitors, regulators, and adversaries can monitor treasury movements, trading strategies, and client flows in real time. A hedge fund's positions, a payroll provider's disbursement schedule, or a corporation's vendor payments are all readable by anyone with a block explorer.
 
 **Regulatory tension.** Paradoxically, full transparency creates compliance challenges. Exposing all customer balances and transaction patterns publicly can conflict with data protection regulations like GDPR, and makes it harder to build products where privacy is a legal requirement.
 
 Solana's privacy stack addresses each of these layers - at the protocol level, at the token level, and at the execution environment level.
+With new cryptography, institutions can still allow verifiability & trustlessness to the protocol but add privacy for the user.
 
 ## 2. Solana's Privacy Stack
 
-The privacy stack is organized into three layers, each solving a different scope of the problem.
+The privacy stack is organized into different layers, each solving a different scope of the problem.
 
-**Token layer - Confidential Transfers.** Token-2022 Confidential Transfers encrypt transfer amounts on-chain using ElGamal encryption and Pedersen commitments. Balances and transfer amounts are hidden from public observers while remaining verifiable through zero-knowledge proofs. This is production-ready and composable with other Token-2022 extensions.
+**Token layer - Confidential Balances.** Confidential Balances is the Token-2022 standard for encrypted token state - an umbrella that covers Confidential Transfers (encrypted transfer amounts), Confidential Mint and Burn, and confidential transfer fees. Balances and amounts are encrypted on-chain with (twisted) ElGamal encryption and Pedersen commitments, hidden from public observers while remaining verifiable through zero-knowledge proofs. It is live on Mainnet and composable with other Token-2022 extensions. Note for an enterprise audience: the underlying ZK ElGamal Proof program was disabled in June 2025 after a soundness bug (forgeable proofs) was found, then patched, re-audited, and re-enabled - worth knowing as a maturity signal, though the feature is available again today. Throughout this module, "Confidential Transfer" refers specifically to the transfer operation within the broader Confidential Balances standard.
 
-**Channel layer - Contra.** Contra is a private payment channel with direct access to Solana Mainnet liquidity. Transactions inside the channel are completely private - no public mempool, no data leakage. Operators control validation, ordering, access rules, and compliance frameworks. Settlement happens in 100ms batches with zero per-transaction fees.
-
-**Appchain layer - Solana Permissioned Environments (SPE).** SPEs are sovereign appchains built on the Solana Virtual Machine. They run an independent blockchain with permissioned validators, restricted data visibility, and operator-defined compliance rules. No shared blockspace with Mainnet.
+**Channel layer - Private Channels (formerly Contra).** Private Channels is a private payment channel with direct access to Solana Mainnet liquidity. (The product was rebranded from "Contra"; the codebase and brochure still carry the Contra name.) Transactions inside the channel are completely private - no public mempool, no data leakage. Operators control validation, ordering, access rules, and compliance frameworks. Settlement happens in 100ms batches with zero per-transaction fees.
 
 ## 3. Token Extensions Architecture
 
-Confidential Transfers is one extension within Token-2022's broader programmable extension model. It is important to understand where it sits alongside the other extensions participants have already seen.
+Confidential Balances is itself a suite of Token-2022 extensions, not a single feature. It spans confidential **transfers** (encrypted transfer amounts, the focus of Sections 4-6), confidential **mint and burn** (issuance and redemption without revealing quantities), and confidential **transfer fees** (fees that stay encrypted alongside the amounts they apply to). All three share the same cryptographic machinery below. It is important to understand where this suite sits alongside the other Token-2022 extensions participants have already seen.
 
-Available extensions include Transfer Fees, Interest-Bearing Tokens, Non-Transferable Tokens, Transfer Hook, Freeze Authority, and Metadata Extension. Confidential Transfers is composable with these - a token can have encrypted amounts and transfer hooks and freeze authority simultaneously.
+Available extensions include Transfer Fees, Interest-Bearing Tokens, Non-Transferable Tokens, Transfer Hook, Freeze Authority, and Metadata Extension. Confidential Balances is composable with these - a token can have encrypted amounts and transfer hooks and freeze authority simultaneously.
 
 The key cryptographic primitives:
 
-- **ElGamal encryption** - Amounts are encrypted under the public keys of the sender, recipient, and (optionally) an auditor. Each party can only decrypt amounts relevant to them.
-- **Pedersen commitments** - Enable zero-knowledge range proofs that verify an amount is within a valid range (0 to 2^64) without revealing the actual value.
-- **Equality proofs** - Certify that all three ciphertexts (sender, recipient, auditor) encode the same value, preventing cheating.
+- **Twisted ElGamal encryption** - A homomorphic version of ElGamal that allows additive computation. Amounts are encrypted under the public keys of the sender, recipient, and (optionally) an auditor. Each party can only decrypt amounts relevant to them.
+- **Zero Knowledge Proofs** - Zero-knowledge range proofs that verify an amount is non-negative and within bounds without revealing the actual value. Zero knowledge equality proofs that certify that all three ciphertexts (sender, recipient, auditor) encode the same value, preventing cheating.
 
 ## 4. Confidential Transfer Instruction Flow
 
@@ -126,14 +125,14 @@ Confidential Transfers support regulatory audit without requiring full transpare
 | amount_sender | ElGamal(pk_sender, x) |
 | amount_receiver | ElGamal(pk_receiver, x) |
 | amount_auditor | ElGamal(pk_auditor, x) |
-| range_proof | Proves 0 <= x < 2^64 and sufficient balance |
+| range_proof | Proves the transfer amount is a valid 48-bit value (0 <= x < 2^48) and that the source has sufficient balance (remaining balance proven over the full 0 <= x < 2^64 range) |
 | equality_proof | Proves all three ciphertexts encode same x |
 
 The separation of encryption_key from signing key per account means decryption rights can be delegated without giving signing rights. The auditor key can be updated via `ConfidentialTransferInstruction::ConfigureMint`.
 
-## 7. Contra - Private Payment Channels
+## 7. Private Channels - Private Payment Channels (formerly Contra)
 
-Contra is a payment channel with direct access to over $100B in Solana Mainnet liquidity. It provides privacy by default, operator-controlled rules, instant settlement, and zero per-transaction fees.
+Private Channels is a payment channel with direct access to over $100B in Solana Mainnet liquidity. It provides privacy by default, operator-controlled rules, instant settlement, and zero per-transaction fees.
 
 **Privacy by default.** No public mempool. Transactions inside the channel are completely private - no front-running, no data leakage to external observers.
 
@@ -141,11 +140,11 @@ Contra is a payment channel with direct access to over $100B in Solana Mainnet l
 
 **Instant settlement.** Thousands of transactions per second with 100ms settlement batches. Near-instant finality without waiting for Mainnet block times.
 
-**Mainnet liquidity access.** Assets in Contra are locked in a Mainnet escrow program and are always accessible. Withdrawals burn channel tokens and release SPL tokens on Mainnet.
+**Mainnet liquidity access.** Assets in Private Channels are locked in a Mainnet escrow program and are always accessible. Withdrawals burn channel tokens and release SPL tokens on Mainnet.
 
-## 8. Contra Architecture
+## 8. Private Channels Architecture
 
-The Contra architecture connects user wallets to Mainnet through an escrow-based bridge and processes transactions through a 5-stage internal pipeline.
+The Private Channels architecture connects user wallets to Mainnet through an escrow-based bridge and processes transactions through a 5-stage internal pipeline.
 
 **Bridge flow:**
 
@@ -163,13 +162,13 @@ The Contra architecture connects user wallets to Mainnet through an escrow-based
 4. **Executor** - Runs batches; AdminVM handles privileged operations, GaslessCallback enables zero-fee execution
 5. **Settler** - Batches every 100ms with atomic commits to PostgreSQL and Redis
 
-## 9. Contra in Practice
+## 9. Private Channels in Practice
 
 A concrete example: how a bank runs a private payment channel for its customers.
 
-**Setup.** The bank creates an SPL or Token-2022 mint on Mainnet, mints tokenized deposits (1:1 USD backed), initializes the Contra Escrow Program on Mainnet, spins up the Contra payment channel (Docker-based), and links the channel to escrow as the operator.
+**Setup.** The bank creates an SPL or Token-2022 mint on Mainnet, mints tokenized deposits (1:1 USD backed), initializes the Private Channels Escrow Program on Mainnet, spins up the Private Channels payment channel (Docker-based), and links the channel to escrow as the operator.
 
-**Deposit and transact.** Tokens are locked in the Contra Escrow Program on Mainnet. Customers receive equivalent balances inside the channel. P2P transfers are instant, private, and carry zero per-transaction fees.
+**Deposit and transact.** Tokens are locked in the Private Channels Escrow Program on Mainnet. Customers receive equivalent balances inside the channel. P2P transfers are instant, private, and carry zero per-transaction fees.
 
 **Withdrawal.** A customer requests withdrawal inside the channel. The Withdrawal Program burns channel tokens. The escrow releases SPL tokens on Mainnet. Optional: batched or confidential transfer settlement.
 
@@ -201,18 +200,45 @@ SPEs are fully sovereign appchains built on the SVM - Solana's performance with 
 
 Production deployments of SPEs include Spherenet, Iron Chain, Pythnet, Alphaledger, and Solstice.
 
+## 12. Beyond the Stack - the Wider Privacy Ecosystem
+
+The layers above (Confidential Balances, Private Channels) are the Foundation-built primitives. They all solve a version of "hide the data, keep the addresses visible." A separate class of protocols tackles a harder problem: **confidential computation** - letting parties compute over data that none of them, and no validator, can see in plaintext. This is what unlocks dark pools, sealed-bid auctions, and private lending, where the *logic* must run on inputs that stay secret. Two projects are worth tracking for institutional use, and they rest on different trust models - which is the right lens for evaluating them.
+
+### Arcium - confidential computation via MPC
+
+Arcium is a decentralized network for confidential computation built on **multiparty computation (MPC)**. Program logic executes across a set of nodes that jointly compute a result without any single node ever seeing the plaintext inputs. The trust assumption is therefore "no dishonest majority of nodes colludes" - a different model from the zero-knowledge proofs behind Confidential Balances, where correctness is mathematically verifiable by anyone.
+
+What it enables: dark pools and sealed-bid auctions (orders stay secret until clearing), private lending, and other flows where the computation itself, not just the balances, must be hidden. A confidential SPL token standard extends Arcium to programmable private assets, so encrypted state can be composed into on-chain logic.
+
+Status (as of June 2026): live on **mainnet alpha** (reached February 2026), having processed 900,000+ encrypted computations, with live applications already ranking among Solana's top protocols by revenue. "Alpha" is the operative caveat for an institutional reader - anyone can deploy but its permissioned to become an MPC node.
+
+### Helius Privacy
+
+Light Protocol is being built into what Helius (a major Solana infrastructure provider, which acquired it) calls a **canonical privacy layer for Solana**, built on **ZK compression**. Where Arcium hides computation and Confidential Balances hides amounts, this layer targets encrypted balances and payments, private markets, and the selective disclosure institutions require while still having full control over their environment - aiming to be a general-purpose, developer-facing privacy primitive rather than a single application.
+
+Status (as of June 2026): **announced, not yet live.** Developer access is expected later in 2026. Treat it as a roadmap item, not something to design against today.
+
+### Also in the ecosystem
+
+Worth knowing, each resting on a distinct trust model, so institutions can match the approach to their own risk and regulatory posture:
+
+- **MagicBlock** - hardware-attested confidentiality via trusted execution environments (TEEs), added to existing Solana programs without rewrites. Suited to confidential order books and real-time trading. Trust model: trusted hardware.
+- **Bonsol** - zero-knowledge proofs of off-chain computation, verified on-chain. For heavy or private workloads.
+- **Noctura and Yona** - shielded-pool anonymity for transfers and swaps (hiding participants, not just amounts), with compliance-oriented disclosure modes.
+
+The takeaway for an architect: On Solana, privacy is not one technique but a spectrum - ZK proofs (verifiable by anyone), MPC (no colluding majority), and TEEs (trust the hardware vendor). Maturity ranges from production-live to announced. Match the model to the threat you actually need to defend against, and confirm each protocol's current production status before relying on it - these move fast.
+
 ---
 
 ## Code Example
 
 [PLACEHOLDER - Module 8 Code Example]
 
-## Hands-On Exercises
-
-[PLACEHOLDER - Module 8 Exercises]
-
 ## Additional Resources
 
+- [Privacy on Solana](https://solana.com/privacy)
 - [Confidential Transfer Documentation](https://solana.com/docs/tokens/extensions/confidential-transfer)
 - [Confidential Balances Overview](https://www.solana-program.com/docs/confidential-balances/overview)
-- [Contra - Solana Launch](https://launch.solana.com/products/contra)
+- [Private Channels - Solana Launch](https://launch.solana.com/products/private-channels)
+- [Arcium](https://www.arcium.com/) - decentralized confidential computation (MPC)
+- [Helius - acquiring Light Protocol to build a canonical privacy layer](https://www.helius.dev/blog/light-protocol-acquisition)

@@ -14,12 +14,12 @@ pub struct Config {
     /// the provided mint account matches this field, so the program is
     /// effectively bound to exactly one mint after initialization.
     pub mint: Pubkey,
-    /// Global pause flag. When true, `mint`/`burn` short-circuit. It does not
-    /// gate thawing (owned by the external Token ACL) and the rate-limit hook
-    /// does not read it. Equivalent to the Ethereum `PauseFacet` bit.
-    pub paused: bool,
     /// Monotonically incremented whenever the config is changed.
     /// Useful for off-chain reconciliation against the off-chain fund record.
+    ///
+    /// Pause state is deliberately *not* mirrored here - it lives in the mint's
+    /// Token-2022 `Pausable` extension, the single source of truth. Read it from
+    /// the mint account rather than from this program's state.
     pub version: u64,
     /// Bump for the config PDA, cached to avoid recomputing it on every
     /// instruction.
