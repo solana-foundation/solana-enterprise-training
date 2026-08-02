@@ -17,9 +17,14 @@
 //!                 `*Timelockable` facets.
 //!
 //! The on-chain mint is a Token-2022 mint with `TransferHook`,
-//! `PermanentDelegate`, and `DefaultAccountState = Frozen` extensions. Mint
-//! authority and permanent delegate are the `Config` PDA; freeze authority is
-//! the admin at creation time.
+//! `PermanentDelegate`, `DefaultAccountState = Frozen`, `Pausable`, and
+//! `PermissionedBurn` extensions. Mint authority, permanent delegate, and
+//! permissioned-burn authority are the `Config` PDA; freeze authority is
+//! the admin at creation time. `PermissionedBurn` disables the standard
+//! `Burn`/`BurnChecked` instructions on this mint: every burn must be
+//! co-signed by the Config PDA, so supply can only shrink through this
+//! program's gated burn instructions - a holder cannot unilaterally burn
+//! shares out of sync with the fund's off-chain books.
 //!
 //! ## Compliance gating is sRFC-37 Token ACL, not this program
 //!
@@ -148,6 +153,19 @@ pub mod mmf_admin {
     /// `BurnableFacet`.
     pub fn burn_mmf(ctx: Context<BurnMmf>, amount: u64) -> Result<()> {
         instructions::burn_mmf::handler(ctx, amount)
+    }
+
+    /// Role-gated self-burn through the mint's Token-2022 `PermissionedBurn`
+    /// extension: the burner (owner) signs and the Config PDA co-signs as
+    /// the mint's burn authority - which it only does when the signer holds
+    /// `ROLE_BURNER`. Immediate, no timelock: the burner can only reduce its
+    /// own balance, so the blast radius matches `mint_mmf` (role-gated,
+    /// immediate), not `force_burn` (timelocked). Used by the redemption
+    /// bridge to settle off-chain redemptions.
+    ///
+    /// Maps to the EVM `BurnableFacet`'s `BURNER_ROLE` self-burn.
+    pub fn permissioned_burn(ctx: Context<PermissionedBurn>, amount: u64) -> Result<()> {
+        instructions::permissioned_burn::handler(ctx, amount)
     }
 
     /*  **** Force actions (timelockable, PermanentDelegate) **** */

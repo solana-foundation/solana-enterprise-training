@@ -10,23 +10,33 @@
  *   • Recovery of tokens from compromised wallets
  *   • Regulatory clawback / forced liquidation
  *
- * Mosaic handles:
- *   • ATA resolution for both source and destination
- *   • sRFC-37 thaw if destination is frozen
- *   • Decimal-to-raw amount conversion
+ * Because the source account was frozen in step 03, the seizure is
+ * composed as one atomic transaction:
+ *   1. Thaw the frozen source account (issuer authority via Token ACL)
+ *   2. Force-transfer the tokens using the Permanent Delegate
+ *   3. Re-freeze the source account
+ * The account is never left unfrozen - all three steps land in the
+ * same transaction.
  *
  * Usage:
  *   npm run force-transfer
  */
 
-import { createForceTransferTransaction } from "@solana/mosaic-sdk";
 import {
-  signTransactionMessageWithSigners,
-  compileTransaction,
-  getBase64EncodedWireTransaction,
+  createForceTransferTransaction,
+  getThawInstructions,
+  getFreezeInstructions,
+  resolveTokenAccount,
+} from "@solana/mosaic-sdk";
+import {
   address,
+  pipe,
+  createTransactionMessage,
+  setTransactionMessageFeePayerSigner,
+  setTransactionMessageLifetimeUsingBlockhash,
+  appendTransactionMessageInstructions,
 } from "@solana/kit";
-import { getRpc, loadAuthority, heading, explorerUrl } from "./helpers.js";
+import { getRpc, loadAuthority, signAndSend, heading, explorerUrl } from "./helpers.js";
 
 // ── Configuration ─────────────────────────────────────────────────
 const MINT_ADDRESS = process.env.MINT_ADDRESS ?? "";
@@ -43,20 +53,36 @@ async function main() {
 
   const rpc = getRpc();
   const authority = await loadAuthority();
+  const mint = address(MINT_ADDRESS);
 
   console.log("  Mint        :", MINT_ADDRESS);
   console.log("  From (seize):", FROM_WALLET);
   console.log("  To (recover):", TO_WALLET);
   console.log("  Amount      :", AMOUNT.toLocaleString(), "USDF");
   console.log();
-  console.log("  Action: Force transfer tokens using Permanent Delegate authority");
+  console.log("  Action: Thaw + force transfer + re-freeze (atomic)");
   console.log();
 
-  // Build force-transfer transaction
-  // The authority acts as the permanent delegate, overriding the owner's approval
-  const tx = await createForceTransferTransaction(
+  // 1. Resolve the frozen source token account
+  const { tokenAccount: sourceAta, isFrozen } = await resolveTokenAccount(
     rpc,
-    address(MINT_ADDRESS),
+    address(FROM_WALLET),
+    mint
+  );
+
+  // 2. Thaw the source account - Token-2022 blocks transfers from frozen
+  //    accounts, even for the Permanent Delegate. Only needed if frozen.
+  const thawInstructions = isFrozen
+    ? await getThawInstructions({ rpc, authority, tokenAccount: sourceAta })
+    : [];
+
+  // 3. Build the force-transfer using the Permanent Delegate authority.
+  //    Mosaic resolves ATAs (creating the recovery ATA if needed) and
+  //    converts the decimal amount. We reuse its instructions so we can
+  //    compose them with the thaw / re-freeze steps.
+  const forceTransferTx = await createForceTransferTransaction(
+    rpc,
+    mint,
     address(FROM_WALLET),     // source wallet
     address(TO_WALLET),       // destination wallet
     AMOUNT,                   // decimal amount
@@ -64,17 +90,36 @@ async function main() {
     authority,                // fee payer
   );
 
-  // Sign and send
+  // 4. Re-freeze the source account so the sanctioned wallet stays blocked
+  const refreezeInstructions = isFrozen
+    ? await getFreezeInstructions({ rpc, authority, tokenAccount: sourceAta })
+    : [];
+
+  // 5. Compose everything into one atomic transaction
+  const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
+
+  const tx = pipe(
+    createTransactionMessage({ version: 0 }),
+    (m) => setTransactionMessageFeePayerSigner(authority, m),
+    (m) => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, m),
+    (m) =>
+      appendTransactionMessageInstructions(
+        [
+          ...thawInstructions,
+          ...forceTransferTx.instructions,
+          ...refreezeInstructions,
+        ],
+        m
+      )
+  );
+
   console.log("  Signing and sending...");
-  const signedTx = await signTransactionMessageWithSigners(tx);
-  const wireTransaction = getBase64EncodedWireTransaction(compileTransaction(signedTx));
-  const signature = await rpc
-    .sendTransaction(wireTransaction, { encoding: "base64" })
-    .send();
+  const signature = await signAndSend(tx);
 
   console.log(`\n  Force transfer complete`);
   console.log(`  ${AMOUNT.toLocaleString()} USDF seized from ${FROM_WALLET}`);
   console.log(`  and transferred to ${TO_WALLET}`);
+  console.log(`  The sanctioned account was re-frozen in the same transaction.`);
   console.log(`  Explorer: ${explorerUrl(signature)}`);
 }
 

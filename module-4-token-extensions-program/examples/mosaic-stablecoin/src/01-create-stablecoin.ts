@@ -7,7 +7,8 @@
  * Extensions enabled:
  *   • Metadata          - on-chain name, symbol, URI
  *   • Pausable          - halt all transfers in an emergency
- *   • DefaultAccountState (Frozen) - new accounts start frozen (blocklist mode)
+ *   • DefaultAccountState - in blocklist mode new accounts start active;
+ *     blocklisted wallets are frozen individually via Token ACL
  *   • ConfidentialBalances - encrypted balances for privacy
  *   • PermanentDelegate - authority can seize / force-transfer tokens
  *
@@ -15,17 +16,15 @@
  *   npm run create-token
  */
 
+import { createStablecoinInitTransaction } from "@solana/mosaic-sdk";
 import {
-  createStablecoinInitTransaction,
-  transactionToB64,
-} from "@solana/mosaic-sdk";
-import {
-  signTransactionMessageWithSigners,
-  getSignatureFromTransaction,
-  compileTransaction,
-  getBase64EncodedWireTransaction,
-} from "@solana/kit";
-import { getRpc, loadAuthority, newKeypair, heading, mintExplorerUrl } from "./helpers.js";
+  getRpc,
+  loadAuthority,
+  newKeypair,
+  signAndSend,
+  heading,
+  mintExplorerUrl,
+} from "./helpers.js";
 
 async function main() {
   heading("MOSAIC - Create Enterprise Stablecoin");
@@ -45,7 +44,7 @@ async function main() {
   console.log("    Pausable");
   console.log("    Confidential Balances");
   console.log("    Permanent Delegate");
-  console.log("    Default Account State (Frozen → blocklist mode)");
+  console.log("    Default Account State (accounts start active in blocklist mode)");
   console.log("    sRFC-37 Token ACL + ABL Blocklist");
   console.log();
 
@@ -64,18 +63,15 @@ async function main() {
     authority.address,                     // confidentialBalancesAuthority
     authority.address,                     // permanentDelegateAuthority
     true,                                  // enableSrfc37 - on-chain access control
+    // The freeze authority must start as the signing authority: the Token ACL
+    // createConfig instruction verifies it before taking over freeze control.
+    // (The SDK's default of the Token ACL program id is rejected on devnet.)
+    authority.address,                     // freezeAuthority
   );
 
   // ── 3. Sign and send ──────────────────────────────────────────
-  console.log("  Signing transaction...");
-  const signedTx = await signTransactionMessageWithSigners(tx);
-  const compiled = compileTransaction(signedTx);
-  const wireTransaction = getBase64EncodedWireTransaction(compiled);
-
-  console.log("  Sending to network...");
-  const signature = await rpc
-    .sendTransaction(wireTransaction, { encoding: "base64" })
-    .send();
+  console.log("  Signing and sending transaction...");
+  const signature = await signAndSend(tx);
 
   console.log(`\n  Stablecoin created!`);
   console.log(`  Signature : ${signature}`);

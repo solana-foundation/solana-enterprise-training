@@ -174,33 +174,7 @@ A concrete example: how a bank runs a private payment channel for its customers.
 
 Key metrics: over $100B in Mainnet liquidity accessible, 100ms settlement batch interval, thousands of transactions per second, and $0 per-transaction channel fees.
 
-## 10. Solana Permissioned Environments (SPE)
-
-SPEs are fully sovereign appchains built on the SVM - Solana's performance with enterprise-grade access control and privacy.
-
-**Sovereign SVM appchain.** An SPE is an independent blockchain running the Solana Virtual Machine. No shared blockspace with Mainnet - full autonomy over consensus, validators, and governance.
-
-**Permissioned validator set.** Operators curate and whitelist validators. All participants are known, vetted, and bound to compliance frameworks. No unverified node can join.
-
-**Configurable privacy.** Data visibility is restricted to authorized participants. Block times, gas tokens, access logic, and compliance hooks are all operator-defined.
-
-**Full SVM compatibility.** Retains Solana's parallel execution, Token-2022 extensions, state compression, and open-source tooling. Programs port trivially from Mainnet.
-
-## 11. SPE vs Mainnet Comparison
-
-| Dimension | Solana Mainnet | Solana Permissioned Environment |
-|-----------|---------------|-------------------------------|
-| Gas Token | SOL (volatile, tradeable) | Customizable (stablecoin, PGAS, gasless) |
-| Blockspace | Shared with all apps | Dedicated - reserved for the environment |
-| Block Times | ~400ms (fixed) | Configurable |
-| Validator Set | ~1,300 globally distributed | Self-operated / curated consortium |
-| Access | Permissionless, open to all | Permissioned - KYC/KYB gating, geofencing |
-| Visibility | Fully public and transparent | Restricted to authorized participants |
-| Governance | On-chain voting + social consensus | Operator-defined - federated or single entity |
-
-Production deployments of SPEs include Spherenet, Iron Chain, Pythnet, Alphaledger, and Solstice.
-
-## 12. Beyond the Stack - the Wider Privacy Ecosystem
+## 10. Beyond the Stack - the Wider Privacy Ecosystem
 
 The layers above (Confidential Balances, Private Channels) are the Foundation-built primitives. They all solve a version of "hide the data, keep the addresses visible." A separate class of protocols tackles a harder problem: **confidential computation** - letting parties compute over data that none of them, and no validator, can see in plaintext. This is what unlocks dark pools, sealed-bid auctions, and private lending, where the *logic* must run on inputs that stay secret. Two projects are worth tracking for institutional use, and they rest on different trust models - which is the right lens for evaluating them.
 

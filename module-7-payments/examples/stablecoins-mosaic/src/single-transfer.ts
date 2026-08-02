@@ -7,8 +7,8 @@
  *
  * This is the simplest payment flow on Solana:
  * 1. Build a transfer transaction with an optional memo
- * 2. Sign and send the transaction
- * 3. The transfer settles in ~400ms with a fee under $0.001
+ * 2. Sign the transaction
+ * 3. Send and confirm - the transfer settles in ~400ms with a fee under $0.001
  *
  * The memo field is used to attach business context to the payment -
  * invoice IDs, reference numbers, or any string that ties the on-chain
@@ -18,16 +18,25 @@
  *   npm run single-transfer
  */
 
-import { address, signAndSendTransactionMessageWithSigners } from "@solana/kit";
+import {
+  address,
+  generateKeyPairSigner,
+  signTransactionMessageWithSigners,
+  getSignatureFromTransaction,
+  sendAndConfirmTransactionFactory,
+  assertIsTransactionWithBlockhashLifetime,
+} from "@solana/kit";
 import { createTransferTransaction } from "@solana/mosaic-sdk";
-import { getRpc, loadSigner, getMintAddress } from "./helpers.js";
+import {
+  getRpc,
+  getRpcSubscriptions,
+  loadSigner,
+  getMintAddress,
+} from "./helpers.js";
 
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
-
-// The recipient wallet address (replace with an actual address)
-const RECIPIENT = address("RecipientWalletAddressHere11111111111111111111");
 
 // The amount to transfer (in human-readable decimals, e.g. "100.50" for 100.50 USDC)
 const AMOUNT = "10.00";
@@ -44,11 +53,18 @@ async function main() {
 
   // 1. Load configuration
   const rpc = getRpc();
+  const rpcSubscriptions = getRpcSubscriptions();
   const sender = await loadSigner();
   const mint = getMintAddress();
 
+  // For this demo we generate a throwaway recipient wallet so the example
+  // runs out of the box. In a real payment flow, use the recipient's actual
+  // wallet address instead:
+  //   const recipient = address("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+  const recipient = (await generateKeyPairSigner()).address;
+
   console.log(`Sender:    ${sender.address}`);
-  console.log(`Recipient: ${RECIPIENT}`);
+  console.log(`Recipient: ${recipient}`);
   console.log(`Mint:      ${mint}`);
   console.log(`Amount:    ${AMOUNT}`);
   console.log(`Memo:      ${MEMO}`);
@@ -67,19 +83,30 @@ async function main() {
     rpc,
     mint,
     from: sender.address,
-    to: RECIPIENT,
+    to: recipient,
     feePayer: sender,
     authority: sender,
     amount: AMOUNT,
     memo: MEMO,
   });
 
-  // 3. Sign and send the transaction
+  // 3. Sign the transaction
   //    The sender signs the transaction (as both authority and fee payer).
-  //    The transaction settles in ~400ms on Solana.
-  console.log("Signing and sending transaction...");
+  console.log("Signing transaction...");
 
-  const signature = await signAndSendTransactionMessageWithSigners(transaction);
+  const signedTransaction = await signTransactionMessageWithSigners(transaction);
+  assertIsTransactionWithBlockhashLifetime(signedTransaction);
+  const signature = getSignatureFromTransaction(signedTransaction);
+
+  // 4. Send and confirm
+  //    The transaction settles in ~400ms on Solana.
+  console.log("Sending and confirming transaction...");
+
+  const sendAndConfirm = sendAndConfirmTransactionFactory({
+    rpc,
+    rpcSubscriptions,
+  });
+  await sendAndConfirm(signedTransaction, { commitment: "confirmed" });
 
   console.log(`\nTransfer complete!`);
   console.log(`Signature: ${signature}`);

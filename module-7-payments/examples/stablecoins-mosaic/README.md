@@ -25,7 +25,7 @@ npm run single-transfer
 **What it demonstrates:**
 - Building a transfer transaction with `createTransferTransaction()`
 - Attaching a memo (invoice ID, payment reference) to the payment
-- Signing and sending with a single function call
+- Signing with the wallet's keypair signer, then sending and confirming
 - Mosaic automatically resolves ATAs, creates them if needed, and handles Token ACL thawing
 
 **Key code:**
@@ -42,7 +42,11 @@ const transaction = await createTransferTransaction({
   memo: "INV-2026-04-001 | Consulting services",
 });
 
-const signature = await signAndSendTransactionMessageWithSigners(transaction);
+const signedTransaction = await signTransactionMessageWithSigners(transaction);
+const signature = getSignatureFromTransaction(signedTransaction);
+
+const sendAndConfirm = sendAndConfirmTransactionFactory({ rpc, rpcSubscriptions });
+await sendAndConfirm(signedTransaction, { commitment: "confirmed" });
 ```
 
 The `amount` field accepts human-readable decimals (e.g. `"100.50"` for 100.50 USDC). Mosaic converts this to raw token units based on the mint's decimal configuration.
@@ -93,7 +97,11 @@ const transaction = pipe(
   (tx) => appendTransactionMessageInstructions(allInstructions, tx)
 );
 
-const signature = await signAndSendTransactionMessageWithSigners(transaction);
+const signedTransaction = await signTransactionMessageWithSigners(transaction);
+const signature = getSignatureFromTransaction(signedTransaction);
+
+const sendAndConfirm = sendAndConfirmTransactionFactory({ rpc, rpcSubscriptions });
+await sendAndConfirm(signedTransaction, { commitment: "confirmed" });
 ```
 
 The difference between `createTransferTransaction()` and `createTransferInstructions()`:
@@ -132,6 +140,9 @@ Edit `.env` with:
 - `RPC_URL` - Your Solana RPC endpoint (e.g. `https://api.devnet.solana.com`)
 - `SENDER_PRIVATE_KEY` - Base58-encoded private key of the sender wallet
 - `MINT_ADDRESS` - Address of your Token-2022 stablecoin mint
+- `RPC_WS_URL` - (Optional) Websocket endpoint used to confirm transactions. Defaults to `RPC_URL` with the protocol switched to `wss://`
+
+Both examples generate throwaway recipient wallets at runtime so they run out of the box - swap in real recipient addresses for actual payment flows.
 
 ### Running
 

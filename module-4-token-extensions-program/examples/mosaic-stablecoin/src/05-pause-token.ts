@@ -15,13 +15,8 @@
  */
 
 import { createPauseTransaction, createResumeTransaction } from "@solana/mosaic-sdk";
-import {
-  signTransactionMessageWithSigners,
-  compileTransaction,
-  getBase64EncodedWireTransaction,
-  address,
-} from "@solana/kit";
-import { getRpc, loadAuthority, heading, explorerUrl } from "./helpers.js";
+import { address } from "@solana/kit";
+import { getRpc, loadAuthority, signAndSend, heading, explorerUrl } from "./helpers.js";
 
 const MINT_ADDRESS = process.env.MINT_ADDRESS ?? "";
 const ACTION = process.argv[2] ?? "pause";  // "pause" or "resume"
@@ -61,11 +56,7 @@ async function main() {
   // Sign and send
   console.log();
   console.log("  Signing and sending...");
-  const signedTx = await signTransactionMessageWithSigners(tx);
-  const wireTransaction = getBase64EncodedWireTransaction(compileTransaction(signedTx));
-  const signature = await rpc
-    .sendTransaction(wireTransaction, { encoding: "base64" })
-    .send();
+  const signature = await signAndSend(tx);
 
   console.log(`\n  Token ${isPause ? "PAUSED" : "RESUMED"}`);
   if (isPause) {
