@@ -90,6 +90,10 @@ npm run blocklist
 #   → Set RECOVERY_WALLET in .env first
 npm run force-transfer
 
+# Step 4: Force-transfer (seize) tokens from the sanctioned wallet
+#   → Set RECOVERY_WALLET in .env first
+npm run force-transfer
+
 # Step 5: Pause all token operations
 npm run pause-token
 # Resume: npx tsx src/05-pause-token.ts resume

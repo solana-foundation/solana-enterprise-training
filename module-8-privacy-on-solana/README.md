@@ -202,6 +202,34 @@ Worth knowing, each resting on a distinct trust model, so institutions can match
 
 The takeaway for an architect: On Solana, privacy is not one technique but a spectrum - ZK proofs (verifiable by anyone), MPC (no colluding majority), and TEEs (trust the hardware vendor). Maturity ranges from production-live to announced. Match the model to the threat you actually need to defend against, and confirm each protocol's current production status before relying on it - these move fast.
 
+## 12. Beyond the Stack - the Wider Privacy Ecosystem
+
+The layers above (Confidential Balances, Private Channels) are the Foundation-built primitives. They all solve a version of "hide the data, keep the addresses visible." A separate class of protocols tackles a harder problem: **confidential computation** - letting parties compute over data that none of them, and no validator, can see in plaintext. This is what unlocks dark pools, sealed-bid auctions, and private lending, where the *logic* must run on inputs that stay secret. Two projects are worth tracking for institutional use, and they rest on different trust models - which is the right lens for evaluating them.
+
+### Arcium - confidential computation via MPC
+
+Arcium is a decentralized network for confidential computation built on **multiparty computation (MPC)**. Program logic executes across a set of nodes that jointly compute a result without any single node ever seeing the plaintext inputs. The trust assumption is therefore "no dishonest majority of nodes colludes" - a different model from the zero-knowledge proofs behind Confidential Balances, where correctness is mathematically verifiable by anyone.
+
+What it enables: dark pools and sealed-bid auctions (orders stay secret until clearing), private lending, and other flows where the computation itself, not just the balances, must be hidden. A confidential SPL token standard extends Arcium to programmable private assets, so encrypted state can be composed into on-chain logic.
+
+Status (as of June 2026): live on **mainnet alpha** (reached February 2026), having processed 900,000+ encrypted computations, with live applications already ranking among Solana's top protocols by revenue. "Alpha" is the operative caveat for an institutional reader - anyone can deploy but its permissioned to become an MPC node.
+
+### Helius Privacy
+
+Light Protocol is being built into what Helius (a major Solana infrastructure provider, which acquired it) calls a **canonical privacy layer for Solana**, built on **ZK compression**. Where Arcium hides computation and Confidential Balances hides amounts, this layer targets encrypted balances and payments, private markets, and the selective disclosure institutions require while still having full control over their environment - aiming to be a general-purpose, developer-facing privacy primitive rather than a single application.
+
+Status (as of June 2026): **announced, not yet live.** Developer access is expected later in 2026. Treat it as a roadmap item, not something to design against today.
+
+### Also in the ecosystem
+
+Worth knowing, each resting on a distinct trust model, so institutions can match the approach to their own risk and regulatory posture:
+
+- **MagicBlock** - hardware-attested confidentiality via trusted execution environments (TEEs), added to existing Solana programs without rewrites. Suited to confidential order books and real-time trading. Trust model: trusted hardware.
+- **Bonsol** - zero-knowledge proofs of off-chain computation, verified on-chain. For heavy or private workloads.
+- **Noctura and Yona** - shielded-pool anonymity for transfers and swaps (hiding participants, not just amounts), with compliance-oriented disclosure modes.
+
+The takeaway for an architect: On Solana, privacy is not one technique but a spectrum - ZK proofs (verifiable by anyone), MPC (no colluding majority), and TEEs (trust the hardware vendor). Maturity ranges from production-live to announced. Match the model to the threat you actually need to defend against, and confirm each protocol's current production status before relying on it - these move fast.
+
 ---
 
 ## Code Example
