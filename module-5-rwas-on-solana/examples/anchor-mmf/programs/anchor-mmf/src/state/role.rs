@@ -28,6 +28,13 @@ pub struct Role {
 /// maintain a mapping — but it's useful to keep the names aligned so the
 /// compliance team can reason about both chains with the same vocabulary.
 pub const ROLE_MINTER: [u8; 32] = *b"MMF__MINTER_ROLE________________";
+/// Permissioned burner — can call `permissioned_burn` to burn MMF from
+/// **their own** token account, immediately and without a timelock. Held by
+/// the redemption bridge / authorized redemption agents: after an off-chain
+/// redemption settles, the agent burns the shares it collected so on-chain
+/// supply tracks the fund's books. It cannot touch anyone else's balance -
+/// burning out of a holder ATA is `force_burn` (compliance, timelocked).
+pub const ROLE_BURNER: [u8; 32] = *b"MMF__BURNER_ROLE________________";
 pub const ROLE_PAUSER: [u8; 32] = *b"MMF__PAUSER_ROLE________________";
 /// Compliance delegate — can call `force_transfer` and `force_burn`, which
 /// use the mint's `PermanentDelegate` extension to move or burn tokens

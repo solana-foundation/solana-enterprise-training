@@ -1,8 +1,7 @@
 use anchor_lang::prelude::*;
-use anchor_spl::{
-    token_2022::{burn, Burn},
-    token_interface::{Mint, TokenAccount, TokenInterface},
-};
+use anchor_lang::solana_program::program::invoke_signed;
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
+use spl_token_2022_interface::extension::permissioned_burn::instruction::burn_checked;
 
 use crate::{
     constants::{CONFIG_SEED, ROLE_SEED, TIMELOCK_FORCE_ACTION},
@@ -22,7 +21,12 @@ use crate::{
 /// run this through the normal maker/checker flow.
 ///
 /// The Config PDA is the mint's permanent delegate, so Token-2022 authorizes
-/// the burn from any holder ATA.
+/// the burn from any holder ATA without the owner's signature. Because the
+/// mint also carries the **PermissionedBurn** extension, the burn goes
+/// through the extension's burn instruction: even the permanent delegate
+/// must carry the burn authority's co-signature. Both are the Config PDA
+/// here, so it signs in both capacities (owner/delegate + burn authority)
+/// with the same seeds.
 #[event_cpi]
 #[derive(Accounts)]
 pub struct ForceBurn<'info> {
@@ -88,16 +92,38 @@ pub fn handler(ctx: Context<ForceBurn>, amount: u64) -> Result<()> {
     let bump = [ctx.accounts.config.bump];
     let signer_seeds: &[&[&[u8]]] = &[&[CONFIG_SEED, &bump]];
 
-    let cpi = CpiContext::new_with_signer(
-        ctx.accounts.token_program.key(),
-        Burn {
-            mint: ctx.accounts.mint.to_account_info(),
-            from: ctx.accounts.from_ata.to_account_info(),
-            authority: ctx.accounts.config.to_account_info(),
-        },
+    // PermissionedBurn: the Config PDA signs both as the permanent delegate
+    // (owner/delegate slot) and as the mint's burn authority - the same
+    // account fills both instruction slots.
+    //
+    // Native `invoke_signed` rather than an anchor `CpiContext` helper:
+    // anchor-spl 1.x has no wrapper for the PermissionedBurn extension yet
+    // (it pins the 2.x interface crate, which predates it). A CpiContext
+    // helper is only sugar over exactly this call - the instruction is still
+    // built by the typed interface-crate builder, `signer_seeds` supplies the
+    // Config PDA signature, and Token-2022 performs all account validation.
+    // When anchor-spl ships a native wrapper, swap this for its CPI helper.
+    let ix = burn_checked(
+        &ctx.accounts.token_program.key(),
+        &ctx.accounts.from_ata.key(),
+        &ctx.accounts.mint.key(),
+        &ctx.accounts.config.key(), // permissioned-burn authority
+        &ctx.accounts.config.key(), // owner/delegate slot: the permanent delegate
+        &[],                        // no multisig signers
+        amount,
+        ctx.accounts.mint.decimals,
+    )?;
+    invoke_signed(
+        &ix,
+        &[
+            ctx.accounts.from_ata.to_account_info(),
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.config.to_account_info(),
+            ctx.accounts.config.to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
+        ],
         signer_seeds,
-    );
-    burn(cpi, amount)?;
+    )?;
 
     msg!(
         "force-burned {} units from {}",

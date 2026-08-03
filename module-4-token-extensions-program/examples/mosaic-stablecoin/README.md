@@ -86,7 +86,7 @@ npm run mint-tokens
 #   → Set SANCTIONED_WALLET in .env first
 npm run blocklist
 
-# Step 4: Force-transfer (seize) tokens from the blocked wallet
+# Step 4: Force-transfer (seize) tokens from the sanctioned wallet
 #   → Set RECOVERY_WALLET in .env first
 npm run force-transfer
 
@@ -108,7 +108,7 @@ npm run inspect-token
 
 ### Blocklist (sRFC-37)
 
-When the stablecoin is created with `enableSrfc37: true` and `aclMode: "blocklist"`, all new token accounts start in an active (unfrozen) state. The issuer can add any wallet to the blocklist at any time, which atomically freezes that wallet's token account. Blocklisted wallets cannot send, receive, or interact with the token until they are removed from the list.
+When the stablecoin is created with `enableSrfc37: true` and `aclMode: "blocklist"`, all new token accounts start in an active (unfrozen) state, and the mint's freeze authority is handed to the Token ACL program's config PDA. The issuer (as Token ACL config authority) can add any wallet to the blocklist at any time and freeze that wallet's token account in the same transaction. Blocklisted wallets cannot send, receive, or interact with the token until they are removed from the list.
 
 This maps directly to OFAC sanctions compliance: flag a wallet, and it is immediately frozen on-chain.
 

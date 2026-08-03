@@ -12,7 +12,14 @@
 //!   4. `force_transfer` through the maker/checker timelock bypasses the rate
 //!      limit (a seizure is never throttled);
 //!   5. an immediate, role-gated pause blocks all movement, and resume restores it;
-//!   6. a client-side Token ACL freeze of a holder blocks transfers into it.
+//!   6. a client-side Token ACL freeze of a holder blocks transfers into it;
+//!   7. the mint's PermissionedBurn extension is enforced: a holder's direct
+//!      Token-2022 `BurnChecked` fails, `permissioned_burn` (owner signature +
+//!      Config PDA co-signature, gated by `ROLE_BURNER`) burns immediately
+//!      with no timelock, and a signer without the role is rejected;
+//!   8. `force_burn` through the maker/checker timelock burns from a holder
+//!      ATA with no holder signature - the Config PDA signs both as the
+//!      permanent delegate and as the permissioned-burn authority.
 //!
 //! All instructions are hand-built with `solana_instruction` so the test does
 //! not depend on any program's generated client. Anchor instruction
@@ -47,6 +54,7 @@ const SYSTEM_PROGRAM: Address = Address::from_str_const("11111111111111111111111
 const SYSVAR_RENT: Address = Address::from_str_const("SysvarRent111111111111111111111111111111111");
 
 const ROLE_MINTER: [u8; 32] = *b"MMF__MINTER_ROLE________________";
+const ROLE_BURNER: [u8; 32] = *b"MMF__BURNER_ROLE________________";
 const ROLE_PAUSER: [u8; 32] = *b"MMF__PAUSER_ROLE________________";
 const ROLE_COMPLIANCE_DELEGATE: [u8; 32] = *b"MMF__COMPLIANCE_DELEGATE_ROLE___";
 const ROLE_RESPONDER: [u8; 32] = *b"MMF__RESPONDER_ROLE_____________";
@@ -58,8 +66,9 @@ const RATE_CAP: u64 = 1_000_000;
 // Force actions are timelocked (see anchor-mmf constants.rs); pause is not.
 const TIMELOCK_FORCE_ACTION: i64 = 24 * 60 * 60;
 
-// TimeLockOperation borsh discriminant for ForceTransfer
+// TimeLockOperation borsh discriminants
 // (enum order: SetRole, Transfer, Burn, ForceBurn, ForceTransfer, OwnershipTransfer).
+const OP_FORCE_BURN: u8 = 3;
 const OP_FORCE_TRANSFER: u8 = 4;
 
 // ---- small helpers ---------------------------------------------------------
@@ -400,6 +409,11 @@ fn token_acl_end_to_end() {
         .unwrap();
     svm.add_program_from_file(GATE, format!("{dir}/anchor-mmf/tests/fixtures/token_acl_gate_program.so"))
         .unwrap();
+    // Override litesvm's bundled Token-2022 with a current devnet build
+    // (`solana program dump TokenzQdB... -u devnet`): the bundled binary
+    // predates the PermissionedBurn extension the mint now uses.
+    svm.add_program_from_file(TOKEN_2022, format!("{dir}/anchor-mmf/tests/fixtures/token_2022.so"))
+        .unwrap();
 
     let admin = Keypair::new();
     let responder = Keypair::new(); // genesis maker/checker checker
@@ -418,6 +432,7 @@ fn token_acl_end_to_end() {
         pda(&[b"mmf-role", role_id, grantee.as_ref()], &MMF_ADMIN).0
     };
     let admin_minter = role(&ROLE_MINTER, &admin.pubkey());
+    let admin_burner = role(&ROLE_BURNER, &admin.pubkey());
     let admin_pauser = role(&ROLE_PAUSER, &admin.pubkey());
     let admin_compliance = role(&ROLE_COMPLIANCE_DELEGATE, &admin.pubkey());
     let responder_role = role(&ROLE_RESPONDER, &responder.pubkey());
@@ -431,6 +446,7 @@ fn token_acl_end_to_end() {
             AccountMeta::new(mint, true),
             AccountMeta::new_readonly(responder.pubkey(), false),
             AccountMeta::new(admin_minter, false),
+            AccountMeta::new(admin_burner, false),
             AccountMeta::new(admin_pauser, false),
             AccountMeta::new(admin_compliance, false),
             AccountMeta::new(responder_role, false),
@@ -701,4 +717,162 @@ fn token_acl_end_to_end() {
     );
     assert!(frozen_try.is_err(), "transfer into a frozen account must fail");
     assert_eq!(token_amount(&svm, &b_ata), b_frozen_balance, "frozen account must not change");
+
+    // 13. PermissionedBurn - the mint carries the Token-2022 PermissionedBurn
+    //     extension (burn authority = Config PDA), so no one can burn with the
+    //     standard instructions; every burn needs the program's co-signature.
+    //     `permissioned_burn` is the immediate, role-gated path (ROLE_BURNER,
+    //     seeded to the admin at genesis): the burner acts as the redemption
+    //     bridge - onboard its own ATA, receive shares, burn them from its own
+    //     account with no timelock. A signer without the role is rejected.
+    let admin_ata = ata(&admin.pubkey(), &mint);
+    send(&mut svm, &[add_wallet(&admin.pubkey(), &list_config, &admin.pubkey())], &admin.pubkey(), &[&admin])
+        .expect("allowlist admin");
+    send(&mut svm, &[create_ata(&admin.pubkey(), &admin.pubkey(), &mint)], &admin.pubkey(), &[&admin])
+        .expect("create admin ATA");
+    send(
+        &mut svm,
+        &[thaw_permissionless(&admin.pubkey(), &mint, &admin.pubkey(), &list_config)],
+        &admin.pubkey(),
+        &[&admin],
+    )
+    .expect("thaw admin ATA");
+
+    // Fund the burner's ATA (admin also holds ROLE_MINTER).
+    let redeemed = 300_000u64;
+    let mut mint_data = ix_disc("mint_mmf").to_vec();
+    mint_data.extend_from_slice(&redeemed.to_le_bytes());
+    let mint_to_burner = Instruction {
+        program_id: MMF_ADMIN,
+        accounts: vec![
+            AccountMeta::new_readonly(admin.pubkey(), true),
+            AccountMeta::new(admin.pubkey(), true),
+            AccountMeta::new_readonly(config, false),
+            AccountMeta::new_readonly(admin_minter, false),
+            AccountMeta::new(mint, false),
+            AccountMeta::new_readonly(admin.pubkey(), false),
+            AccountMeta::new(admin_ata, false),
+            AccountMeta::new_readonly(TOKEN_2022, false),
+            AccountMeta::new_readonly(ATA_PROGRAM, false),
+            AccountMeta::new_readonly(SYSTEM_PROGRAM, false),
+        ],
+        data: mint_data,
+    };
+    send(&mut svm, &[mint_to_burner], &admin.pubkey(), &[&admin]).expect("mint to burner ATA");
+    assert_eq!(token_amount(&svm, &admin_ata), redeemed);
+
+    // A direct Token-2022 `BurnChecked` (instruction 15) signed by the owner
+    // alone must fail: the PermissionedBurn extension disables the standard
+    // burn path. This is what stops any holder from unilaterally shrinking
+    // the supply out of sync with the fund's books.
+    let mut std_burn_data = vec![15u8];
+    std_burn_data.extend_from_slice(&10_000u64.to_le_bytes());
+    std_burn_data.push(DECIMALS);
+    let std_burn = Instruction {
+        program_id: TOKEN_2022,
+        accounts: vec![
+            AccountMeta::new(admin_ata, false),
+            AccountMeta::new(mint, false),
+            AccountMeta::new_readonly(admin.pubkey(), true),
+        ],
+        data: std_burn_data,
+    };
+    let std_try = send(&mut svm, &[std_burn], &admin.pubkey(), &[&admin]);
+    assert!(std_try.is_err(), "standard BurnChecked must fail with PermissionedBurn enabled");
+    assert_eq!(token_amount(&svm, &admin_ata), redeemed, "failed standard burn must not move tokens");
+
+    let permissioned_burn = |burner: &Address, role_pda: &Address, from_ata: &Address, amount: u64| {
+        let mut data = ix_disc("permissioned_burn").to_vec();
+        data.extend_from_slice(&amount.to_le_bytes());
+        Instruction {
+            program_id: MMF_ADMIN,
+            accounts: vec![
+                AccountMeta::new_readonly(*burner, true),
+                AccountMeta::new_readonly(config, false),
+                AccountMeta::new_readonly(*role_pda, false),
+                AccountMeta::new(mint, false),
+                AccountMeta::new(*from_ata, false),
+                AccountMeta::new_readonly(TOKEN_2022, false),
+            ],
+            data,
+        }
+    };
+
+    // Happy path: the ROLE_BURNER holder burns part of its own balance,
+    // immediately - no proposal, no responder, no delay.
+    let burned = 200_000u64;
+    send(
+        &mut svm,
+        &[permissioned_burn(&admin.pubkey(), &admin_burner, &admin_ata, burned)],
+        &admin.pubkey(),
+        &[&admin],
+    )
+    .expect("permissioned_burn by ROLE_BURNER holder");
+    assert_eq!(
+        token_amount(&svm, &admin_ata),
+        redeemed - burned,
+        "permissioned burn should reduce the burner's own balance"
+    );
+
+    // Negative path: holder A has tokens but no ROLE_BURNER grant - the role
+    // PDA for (ROLE_BURNER, holder_a) does not exist, so the burn is rejected.
+    let a_role_burner = role(&ROLE_BURNER, &holder_a.pubkey());
+    let a_balance = token_amount(&svm, &a_ata);
+    let no_role_try = send(
+        &mut svm,
+        &[permissioned_burn(&holder_a.pubkey(), &a_role_burner, &a_ata, 10_000)],
+        &holder_a.pubkey(),
+        &[&holder_a],
+    );
+    assert!(no_role_try.is_err(), "permissioned_burn without ROLE_BURNER must fail");
+    assert_eq!(token_amount(&svm, &a_ata), a_balance, "rejected burn must not move tokens");
+
+    // 14. Force burn through the maker/checker timelock. The holder does NOT
+    //     sign: the Config PDA acts as the mint's permanent delegate in the
+    //     owner/delegate slot AND as the permissioned-burn authority - the
+    //     PermissionedBurn extension requires the co-signature even from the
+    //     permanent delegate, and the same PDA provides both signatures.
+    let seized_burn = 50_000u64;
+    let fb_seed = 2u64;
+    let fb_proposal = proposal_pda(&admin.pubkey(), fb_seed);
+    let mut fb_action = Vec::new();
+    fb_action.extend_from_slice(a_ata.as_ref());
+    fb_action.extend_from_slice(&seized_burn.to_le_bytes());
+    send(
+        &mut svm,
+        &[create_proposal(&admin.pubkey(), &admin_compliance, fb_seed, OP_FORCE_BURN, &fb_action)],
+        &admin.pubkey(),
+        &[&admin],
+    )
+    .expect("propose force_burn");
+    send(&mut svm, &[respond(&responder.pubkey(), &responder_role, &fb_proposal)], &responder.pubkey(), &[&responder])
+        .expect("respond force_burn");
+    warp(&mut svm, TIMELOCK_FORCE_ACTION + 1);
+
+    let event_authority = pda(&[b"__event_authority"], &MMF_ADMIN).0;
+    let mut fb_data = ix_disc("force_burn").to_vec();
+    fb_data.extend_from_slice(&seized_burn.to_le_bytes());
+    let force_burn_ix = Instruction {
+        program_id: MMF_ADMIN,
+        accounts: vec![
+            AccountMeta::new(admin.pubkey(), true),             // delegate
+            AccountMeta::new_readonly(config, false),
+            AccountMeta::new_readonly(admin_compliance, false), // role (COMPLIANCE)
+            AccountMeta::new(fb_proposal, false),               // timelock (mut)
+            AccountMeta::new(mint, false),                      // mint (mut - supply shrinks)
+            AccountMeta::new(a_ata, false),                     // from_ata
+            AccountMeta::new_readonly(TOKEN_2022, false),
+            AccountMeta::new_readonly(event_authority, false),  // #[event_cpi]
+            AccountMeta::new_readonly(MMF_ADMIN, false),        // #[event_cpi]
+        ],
+        data: fb_data,
+    };
+    let a_before_force_burn = token_amount(&svm, &a_ata);
+    send(&mut svm, &[force_burn_ix], &admin.pubkey(), &[&admin])
+        .expect("force_burn: permanent delegate + permissioned-burn co-signature");
+    assert_eq!(
+        token_amount(&svm, &a_ata),
+        a_before_force_burn - seized_burn,
+        "force burn should destroy tokens from the holder ATA without the holder's signature"
+    );
 }

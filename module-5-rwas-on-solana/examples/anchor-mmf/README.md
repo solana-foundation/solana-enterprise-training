@@ -75,6 +75,7 @@ that exposes one address with many facets.
 | Allow/block list compliance | external sRFC-37 Token ACL + ABL gate (default-frozen mint + gated permissionless thaw) |
 | `PauseFacet` | Token-2022 **Pausable** extension + `set_paused` ix (immediate, role-gated, protocol-level halt of all transfer/mint/burn) |
 | `MintBurnFacet` | `mint_mmf` / `burn_mmf` ix |
+| `BurnableFacet` (`BURNER_ROLE` self-burn) | Token-2022 **PermissionedBurn** extension + `permissioned_burn` ix (immediate, role-gated burn of the signer's own balance, co-signed by the Config PDA) |
 | Account freeze (block a holder) | **client-side** Token ACL `Freeze` / ABL block list (freeze authority lives in Token ACL, not this program) |
 | Implicit operator authority | `force_transfer` / `force_burn` ix (timelocked), backed by the mint's `PermanentDelegate` extension |
 | `diamondCut` upgradeability | BPF upgrade authority on both programs (e.g. a Squads multisig) |
@@ -87,6 +88,20 @@ against the fund's books between upgrades.
 Defined in `mmf_admin::state::role`:
 
 - `ROLE_MINTER` — can mint (subscription bridge) and burn (redemption bridge).
+- `ROLE_BURNER` — can `permissioned_burn` from **their own** ATA, immediately.
+  Held by the redemption bridge / authorized redemption agents: after an
+  off-chain redemption settles, the agent burns the shares it collected so
+  supply tracks the fund's books. It cannot touch anyone else's balance —
+  that is `force_burn`, which stays timelocked.
+
+  The mint carries the Token-2022 **PermissionedBurn** extension with the
+  Config PDA as burn authority, so the standard `Burn`/`BurnChecked`
+  instructions fail on this mint — for holders *and* for the permanent
+  delegate. Every burn needs the Config PDA's co-signature, which the program
+  only produces inside its three gated paths: `permissioned_burn`
+  (ROLE_BURNER, immediate, own balance), `burn_mmf` (timelocked redemption,
+  holder co-signs), and `force_burn` (timelocked seizure). No holder can
+  unilaterally shrink the supply out of sync with the fund's off-chain books.
 - `ROLE_PAUSER` — can pause/resume the mint (Pausable extension), immediately.
 - `ROLE_COMPLIANCE_DELEGATE` — can `force_transfer` and `force_burn` from any
   holder ATA, via the mint's `PermanentDelegate` extension. Used for sanctions
@@ -98,10 +113,13 @@ Defined in `mmf_admin::state::role`:
 **Two speeds, no break-glass role.** The privileged actions split by how
 time-critical they are:
 
-- **Immediate (role only):** `set_paused` and freezing a holder. These are the
-  circuit breakers - you must be able to halt the mint, or stop one bad actor,
-  in the same block. Dual-control comes from the authorizing key being a
-  multisig, not from an on-chain delay.
+- **Immediate (role only):** `set_paused`, freezing a holder, and
+  `permissioned_burn`. The first two are the circuit breakers - you must be
+  able to halt the mint, or stop one bad actor, in the same block.
+  `permissioned_burn` is immediate for a different reason: the burner can only
+  reduce its **own** balance, so the blast radius is bounded by what it already
+  holds. Dual-control comes from the authorizing key being a multisig, not
+  from an on-chain delay.
 - **Timelocked (maker/checker):** `set_role`, `burn_mmf`, `force_transfer`,
   `force_burn`. These move value or change permissions, are never urgent (the
   target is already frozen if it was an incident), and require a proposer with
@@ -112,7 +130,7 @@ There is no emergency/break-glass role that bypasses a timelock.
 **Genesis roles.** Because every timelocked action needs two distinct keys (a
 proposer with the action's role + a responder), a clean slate cannot bootstrap
 itself. So `initialize` seeds an operable starting set directly: the deployer
-receives the operator roles (`ROLE_MINTER`, `ROLE_PAUSER`,
+receives the operator roles (`ROLE_MINTER`, `ROLE_BURNER`, `ROLE_PAUSER`,
 `ROLE_COMPLIANCE_DELEGATE`) and a second `responder` key receives
 `ROLE_RESPONDER`. In production the admin should hand each operator role to a
 dedicated key and revoke its own, via the normal timelocked `set_role`.
@@ -194,6 +212,7 @@ programs/
 │   │       ├── pause.rs
 │   │       ├── mint_mmf.rs
 │   │       ├── burn_mmf.rs
+│   │       ├── permissioned_burn.rs
 │   │       ├── force_transfer.rs
 │   │       ├── force_burn.rs
 │   │       ├── create_timelock_proposal.rs

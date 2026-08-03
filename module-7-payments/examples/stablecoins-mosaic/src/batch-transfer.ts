@@ -22,18 +22,26 @@
  */
 
 import {
-  address,
   pipe,
+  generateKeyPairSigner,
   createTransactionMessage,
   setTransactionMessageFeePayerSigner,
   setTransactionMessageLifetimeUsingBlockhash,
   appendTransactionMessageInstructions,
-  signAndSendTransactionMessageWithSigners,
+  signTransactionMessageWithSigners,
+  getSignatureFromTransaction,
+  sendAndConfirmTransactionFactory,
+  assertIsTransactionWithBlockhashLifetime,
   type Address,
-  type IInstruction,
+  type Instruction,
 } from "@solana/kit";
 import { createTransferInstructions } from "@solana/mosaic-sdk";
-import { getRpc, loadSigner, getMintAddress } from "./helpers.js";
+import {
+  getRpc,
+  getRpcSubscriptions,
+  loadSigner,
+  getMintAddress,
+} from "./helpers.js";
 
 // ---------------------------------------------------------------------------
 // Payment batch - define recipients, amounts, and memos
@@ -45,29 +53,26 @@ interface Payment {
   memo: string;
 }
 
-// Example: a payroll batch or multi-recipient disbursement
-const PAYMENTS: Payment[] = [
-  {
-    to: address("Recipient1WalletAddressHere1111111111111111111"),
-    amount: "1500.00",
-    memo: "PAYROLL-2026-04 | Employee #1001 - April salary",
-  },
-  {
-    to: address("Recipient2WalletAddressHere1111111111111111111"),
-    amount: "2200.00",
-    memo: "PAYROLL-2026-04 | Employee #1002 - April salary",
-  },
-  {
-    to: address("Recipient3WalletAddressHere1111111111111111111"),
-    amount: "1800.00",
-    memo: "PAYROLL-2026-04 | Employee #1003 - April salary",
-  },
-  {
-    to: address("Recipient4WalletAddressHere1111111111111111111"),
-    amount: "3100.00",
-    memo: "PAYROLL-2026-04 | Employee #1004 - April salary",
-  },
-];
+// Example: a payroll batch or multi-recipient disbursement.
+// For this demo we generate throwaway recipient wallets so the example runs
+// out of the box. In a real payment flow, use your recipients' actual wallet
+// addresses instead:
+//   { to: address("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"), ... }
+async function buildPaymentBatch(): Promise<Payment[]> {
+  const entries = [
+    { amount: "1500.00", memo: "PAYROLL-2026-04 | Employee #1001 - April salary" },
+    { amount: "2200.00", memo: "PAYROLL-2026-04 | Employee #1002 - April salary" },
+    { amount: "1800.00", memo: "PAYROLL-2026-04 | Employee #1003 - April salary" },
+    { amount: "3100.00", memo: "PAYROLL-2026-04 | Employee #1004 - April salary" },
+  ];
+
+  return Promise.all(
+    entries.map(async (entry) => ({
+      to: (await generateKeyPairSigner()).address,
+      ...entry,
+    }))
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Main
@@ -78,12 +83,14 @@ async function main() {
 
   // 1. Load configuration
   const rpc = getRpc();
+  const rpcSubscriptions = getRpcSubscriptions();
   const sender = await loadSigner();
   const mint = getMintAddress();
+  const payments = await buildPaymentBatch();
 
   console.log(`Sender: ${sender.address}`);
   console.log(`Mint:   ${mint}`);
-  console.log(`Batch:  ${PAYMENTS.length} payments\n`);
+  console.log(`Batch:  ${payments.length} payments\n`);
 
   // 2. Build transfer instructions for each payment
   //    createTransferInstructions() returns the raw instructions without
@@ -91,9 +98,9 @@ async function main() {
   //    sets of instructions into a single transaction.
   console.log("Building transfer instructions...\n");
 
-  const allInstructions: IInstruction[] = [];
+  const allInstructions: Instruction[] = [];
 
-  for (const payment of PAYMENTS) {
+  for (const payment of payments) {
     console.log(`  -> ${payment.to} | ${payment.amount} | ${payment.memo}`);
 
     const instructions = await createTransferInstructions({
@@ -128,25 +135,33 @@ async function main() {
     (tx) => appendTransactionMessageInstructions(allInstructions, tx)
   );
 
-  // 4. Sign and send the batch transaction
+  // 4. Sign the batch transaction, then send and confirm
   console.log("Signing and sending batch transaction...");
 
-  const signature = await signAndSendTransactionMessageWithSigners(transaction);
+  const signedTransaction = await signTransactionMessageWithSigners(transaction);
+  assertIsTransactionWithBlockhashLifetime(signedTransaction);
+  const signature = getSignatureFromTransaction(signedTransaction);
+
+  const sendAndConfirm = sendAndConfirmTransactionFactory({
+    rpc,
+    rpcSubscriptions,
+  });
+  await sendAndConfirm(signedTransaction, { commitment: "confirmed" });
 
   // 5. Summary
-  const totalAmount = PAYMENTS.reduce(
+  const totalAmount = payments.reduce(
     (sum, p) => sum + parseFloat(p.amount),
     0
   );
 
   console.log(`\nBatch transfer complete!`);
-  console.log(`Payments:   ${PAYMENTS.length}`);
+  console.log(`Payments:   ${payments.length}`);
   console.log(`Total:      ${totalAmount.toFixed(2)}`);
   console.log(`Signature:  ${signature}`);
   console.log(
     `Explorer:   https://explorer.solana.com/tx/${signature}?cluster=devnet`
   );
-  console.log(`\nAll ${PAYMENTS.length} transfers settled atomically in a single transaction.`);
+  console.log(`\nAll ${payments.length} transfers settled atomically in a single transaction.`);
 }
 
 main().catch(console.error);

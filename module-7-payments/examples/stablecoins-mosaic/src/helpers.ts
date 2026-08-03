@@ -8,9 +8,10 @@ import {
   type KeyPairSigner,
   createKeyPairSignerFromBytes,
   createSolanaRpc,
+  createSolanaRpcSubscriptions,
+  getBase58Encoder,
   address,
 } from "@solana/kit";
-import { getBase58Decoder } from "@solana/codecs";
 
 // ---------------------------------------------------------------------------
 // Environment helpers
@@ -35,14 +36,25 @@ export function getRpc() {
   return createSolanaRpc(rpcUrl);
 }
 
+// Websocket client used to confirm transactions. Defaults to the RPC URL with
+// the protocol switched to ws(s); override with RPC_WS_URL if your provider
+// uses a different websocket endpoint.
+export function getRpcSubscriptions() {
+  const wsUrl =
+    process.env.RPC_WS_URL ??
+    getEnvOrThrow("RPC_URL").replace(/^http/, "ws");
+  return createSolanaRpcSubscriptions(wsUrl);
+}
+
 // ---------------------------------------------------------------------------
 // Signer from base58 private key
 // ---------------------------------------------------------------------------
 
 export async function loadSigner(): Promise<KeyPairSigner<string>> {
   const raw = getEnvOrThrow("SENDER_PRIVATE_KEY");
-  const bytes = getBase58Decoder().decode(raw);
-  return createKeyPairSignerFromBytes(bytes as unknown as CryptoKey & Uint8Array);
+  // A base58 *encoder* converts a base58 string into bytes.
+  const bytes = getBase58Encoder().encode(raw);
+  return createKeyPairSignerFromBytes(bytes);
 }
 
 // ---------------------------------------------------------------------------

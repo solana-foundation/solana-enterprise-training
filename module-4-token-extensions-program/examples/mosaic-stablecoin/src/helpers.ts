@@ -11,15 +11,15 @@ import {
   createSolanaRpcSubscriptions,
   generateKeyPairSigner,
   createKeyPairSignerFromBytes,
-  signAndSendTransactionMessageWithSigners,
   type Rpc,
   type SolanaRpcApi,
   type KeyPairSigner,
   type RpcSubscriptions,
   type SolanaRpcSubscriptionsApi,
   getSignatureFromTransaction,
-  compileTransaction,
   signTransactionMessageWithSigners,
+  sendAndConfirmTransactionFactory,
+  assertIsTransactionWithBlockhashLifetime,
 } from "@solana/kit";
 import type { FullTransaction } from "@solana/mosaic-sdk";
 import "dotenv/config";
@@ -57,7 +57,7 @@ export async function loadAuthority(): Promise<KeyPairSigner> {
 
   // Support both JSON array format [1,2,3,...] and comma-separated format
   const cleaned = raw.trim().replace(/^\[/, "").replace(/\]$/, "");
-  const bytes = new Uint8Array(cleaned.split(",").map((s) => Number(s.trim())));
+  const bytes = new Uint8Array(cleaned.split(",").map((s: string) => Number(s.trim())));
 
   if (bytes.length !== 64) {
     throw new Error(
@@ -81,56 +81,23 @@ export async function newKeypair(): Promise<KeyPairSigner> {
 // ---------------------------------------------------------------------------
 
 /**
- * Signs and sends a FullTransaction built by the Mosaic SDK, then
- * confirms the transaction and returns the signature string.
+ * Signs a FullTransaction built by the Mosaic SDK with the signers it
+ * carries, sends it, waits for confirmation, and returns the signature.
  */
-export async function signAndSend(
-  tx: FullTransaction,
-  signers: KeyPairSigner[]
-): Promise<string> {
+export async function signAndSend(tx: FullTransaction): Promise<string> {
   const rpc = getRpc();
-  const rpcSubs = getRpcSubscriptions();
+  const rpcSubscriptions = getRpcSubscriptions();
 
-  // Sign and send using Solana Kit's built-in helper
   const signedTx = await signTransactionMessageWithSigners(tx);
-  const signature = getSignatureFromTransaction(compileTransaction(signedTx));
+  assertIsTransactionWithBlockhashLifetime(signedTx);
+  const signature = getSignatureFromTransaction(signedTx);
 
-  await rpc
-    .sendTransaction(
-      // @ts-ignore - encoding accepted at runtime
-      Buffer.from(
-        new Uint8Array(
-          (() => {
-            const codec = (await import("@solana/kit")).getTransactionCodec();
-            return codec.encode(compileTransaction(signedTx));
-          })()
-        )
-      ).toString("base64"),
-      { encoding: "base64" }
-    )
-    .send();
-
-  // Wait for confirmation
   console.log(`  Confirming transaction...`);
-  const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
-
-  // Poll for confirmation
-  let confirmed = false;
-  for (let i = 0; i < 30; i++) {
-    const status = await rpc
-      .getSignatureStatuses([signature])
-      .send();
-    if (status.value[0]?.confirmationStatus === "confirmed" ||
-        status.value[0]?.confirmationStatus === "finalized") {
-      confirmed = true;
-      break;
-    }
-    await new Promise((r) => setTimeout(r, 2000));
-  }
-
-  if (!confirmed) {
-    console.warn("  Transaction may not have confirmed in time.");
-  }
+  const sendAndConfirm = sendAndConfirmTransactionFactory({
+    rpc,
+    rpcSubscriptions,
+  });
+  await sendAndConfirm(signedTx, { commitment: "confirmed" });
 
   return signature;
 }
