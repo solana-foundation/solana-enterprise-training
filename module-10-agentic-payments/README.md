@@ -32,7 +32,7 @@ This module assumes the participant has completed Module 7 (Payments on Solana) 
 
 ## Slides
 
-[Agentic Payments — Slides](TBD)
+[Agentic Payments — Slides](https://docs.google.com/presentation/d/1TTCR3CfC8Cvq0sTLubwqeI2V2Vw7DM162bTZp76ht88/edit?usp=sharing)
 
 ## Example
 
