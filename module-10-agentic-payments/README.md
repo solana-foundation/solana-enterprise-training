@@ -28,7 +28,7 @@
 
 ## Prerequisite
 
-This module assumes the participant has completed Module 7 (Payments on Solana) or has equivalent familiarity with SPL token transfers, ATAs, transaction construction, and commitment levels.
+Completed Module 7 (Payments on Solana) or equivalent familiarity with SPL token transfers, ATAs, transaction construction, and commitment levels.
 
 ## Slides
 
