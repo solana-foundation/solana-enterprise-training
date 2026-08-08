@@ -285,7 +285,7 @@ This is the developer-experience layer of agentic payments: any existing CLI too
 x402 is not the only live payment standard on Solana. **MPP (Machine Payments Protocol)** is the second protocol the `pay` CLI supports, and the two coexist deliberately:
 
 - **x402** expresses the challenge through the `402 Payment Required` status code and the `X-PAYMENT` header.
-- **MPP** expresses the challenge through the standard **`WWW-Authenticate`** header and retries with an **authorization credential** — the same negotiation shape HTTP already uses for authentication, applied to payment. The specification lives at [paymentauth.org](https://paymentauth.org/draft-solana-charge-00.html/) as `draft-solana-charge`.
+- **MPP** expresses the challenge through the standard **`WWW-Authenticate`** header and retries with an **authorization credential** — the same negotiation shape HTTP already uses for authentication, applied to payment. The specification lives at [paymentauth.org](https://paymentauth.org/draft-solana-charge-00.html) as `draft-solana-charge`.
 
 In practice, a client like `pay` does not care which protocol a server speaks: it detects the challenge type, prepares the stablecoin transaction, requests local wallet approval, and retries with the right proof format. You can exercise an MPP challenge against the public debugger:
 
