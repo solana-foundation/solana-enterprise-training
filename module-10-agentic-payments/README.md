@@ -33,7 +33,7 @@ Completed Module 7 (Payments on Solana) or equivalent familiarity with SPL token
 
 ## Slides
 
-[Agentic Payments — Slides](https://docs.google.com/presentation/d/1TTCR3CfC8Cvq0sTLubwqeI2V2Vw7DM162bTZp76ht88/edit?usp=sharing)
+[Agentic Payments — Slides](https://docs.google.com/presentation/d/1z0tCp_ptb_0Ho_hopZL9hJhTIQnWM-UMl1hUJWdizwo/edit?usp=sharing)
 
 ## Example
 
