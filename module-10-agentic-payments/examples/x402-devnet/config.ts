@@ -2,19 +2,19 @@
 // Lab step 2 ("different SPL token and price") is done here: point TOKEN_MINT
 // at any devnet mint you control and adjust PRICE_BASE_UNITS / TOKEN_DECIMALS.
 
-import { PublicKey } from "@solana/web3.js";
+import { address } from "@solana/kit";
 
 export const RPC_URL = "https://api.devnet.solana.com";
 
 // Devnet USDC (circulated by the faucet at https://faucet.circle.com).
 // Swap this for your own devnet mint to complete lab step 2.
-export const TOKEN_MINT = new PublicKey(
+export const TOKEN_MINT = address(
   "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
 );
 export const TOKEN_DECIMALS = 6;
 
-// Price per request, in base units (100 = 0.0001 USDC at 6 decimals).
-export const PRICE_BASE_UNITS = 100;
+// Price per request, in base units (100n = 0.0001 USDC at 6 decimals).
+export const PRICE_BASE_UNITS = 100n;
 
 export const SERVER_PORT = 3001;
 

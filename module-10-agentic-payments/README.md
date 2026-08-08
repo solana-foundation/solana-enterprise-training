@@ -8,6 +8,7 @@
 - Understand the role of facilitators and the trade-offs of using one versus self-managed verification
 - Implement a minimal x402 server that verifies and settles SPL token payments
 - Implement a minimal x402 client that constructs, signs, and submits payment proofs
+- Contrast x402 with MPP (Machine Payments Protocol) and explain how payment channels reduce n payments to two on-chain transactions
 - Evaluate the x402 tooling ecosystem (Corbits, MCPay, PayAI, Coinbase reference implementation, ACK, A2A)
 - Identify enterprise use cases: API metering, MCP server monetization, agent-to-agent commerce, and pay-per-use data services
 
@@ -22,7 +23,7 @@
 - Server-side implementation
 - Client-side implementation
 - Verification and security considerations
-- pay.sh: payments for HTTP agents and CLI tools
+- pay.sh: payments for HTTP agents and CLI tools; MPP and payment channels
 - The x402 tooling ecosystem
 - Enterprise use cases
 
@@ -279,6 +280,50 @@ pay setup
 
 This is the developer-experience layer of agentic payments: any existing CLI tool becomes payment-capable without modification.
 
+### MPP: the Machine Payments Protocol
+
+x402 is not the only live payment standard on Solana. **MPP (Machine Payments Protocol)** is the second protocol the `pay` CLI supports, and the two coexist deliberately:
+
+- **x402** expresses the challenge through the `402 Payment Required` status code and the `X-PAYMENT` header.
+- **MPP** expresses the challenge through the standard **`WWW-Authenticate`** header and retries with an **authorization credential** — the same negotiation shape HTTP already uses for authentication, applied to payment. The specification lives at [paymentauth.org](https://paymentauth.org/draft-solana-charge-00.html/) as `draft-solana-charge`.
+
+In practice, a client like `pay` does not care which protocol a server speaks: it detects the challenge type, prepares the stablecoin transaction, requests local wallet approval, and retries with the right proof format. You can exercise an MPP challenge against the public debugger:
+
+```bash
+# Without pay - you get the challenge
+curl https://debugger.pay.sh/mpp/quote/AAPL
+
+# With pay - the challenge is handled and the response returned
+pay curl https://debugger.pay.sh/mpp/quote/AAPL
+```
+
+The takeaway for architects: the challenge-negotiation layer is still standardizing (x402, MPP, and Google's AP2 all target the same gap), but they converge on the same fundamentals — HTTP-native negotiation, stablecoin settlement on Solana, and wallet-authorized signing. Server-side verification logic (Section 9) is largely protocol-independent.
+
+### Payment channels: one settlement for many payments
+
+Per-request on-chain settlement has a floor: every request costs one transaction fee and one confirmation round-trip. For **metered, streamed, or very-high-frequency** payments — per-token LLM billing, per-second streaming, thousands of calls in a session — even sub-cent fees and sub-second finality become the bottleneck.
+
+The Solana Foundation's [payment-channels](https://github.com/solana-foundation/payment-channels) program is the primitive that removes that floor: **unidirectional payment channels** where one `open` and one `settle` replace a transaction per payment. It is a small Pinocchio program over SPL Token / Token-2022, live on mainnet ([`CHNLxYvVA28MJP9PrFuDXccuoGXAx7jBacfLEkahyGsX`](https://explorer.solana.com/address/CHNLxYvVA28MJP9PrFuDXccuoGXAx7jBacfLEkahyGsX)).
+
+**How it works:**
+
+1. **`open`** — the payer escrows a deposit into a channel PDA. This is the spending ceiling.
+2. **Off-chain vouchers** — the payer signs Ed25519 vouchers authorizing **cumulative** spend. A newer voucher supersedes older ones, and the program never settles more than the deposit. No transaction, no fee, no latency per payment.
+3. **`settle`** — the merchant advances the on-chain settled amount from a signed voucher.
+4. **`distribute`** — pays the payee (and any split recipients), refunds the unspent remainder to the payer, and closes the escrow.
+5. **`reclaim`** — deallocates the channel and recovers 100% of its rent. A closed channel leaves nothing on chain.
+
+Closing is either cooperative (`settle_and_seal` in one step) or forced (`request_close` starts a grace period, then `seal`), so a disappearing counterparty cannot lock funds.
+
+**This is the settlement layer behind two pay.sh primitives:**
+
+| Primitive | Pattern |
+|-----------|---------|
+| x402 `upto` | A single metered call: escrow a ceiling, the operator settles one voucher for the *actual* amount consumed and refunds the rest |
+| MPP `session` | A streamed channel: many cumulative vouchers during the session, settled once when the session idle-closes |
+
+**The enterprise framing:** channels change the cost model from *O(n) transactions for n payments* to *O(1)*. An agent streaming inference from a paid model signs a voucher per chunk at zero marginal cost, and exactly two on-chain transactions bracket the entire session. Combined with the x402/MPP negotiation layer, this makes true per-token and per-second pricing operationally viable.
+
 ## 11. The x402 tooling ecosystem
 
 The space is evolving quickly; this table reflects the current landscape:
@@ -347,3 +392,6 @@ Note: the example code is unaudited demonstration code — the lab is about prot
 - [x402 GitHub (Coinbase)](https://github.com/coinbase/x402) — Reference implementation.
 - [x402scan](https://x402scan.com/) — Ecosystem explorer and analytics.
 - [pay.sh docs](https://pay.sh/docs) — CLI payment layer installation and usage.
+- [MPP specification (draft-solana-charge)](https://paymentauth.org/draft-solana-charge-00.html/) — The Machine Payments Protocol.
+- [payment-channels (Solana Foundation)](https://github.com/solana-foundation/payment-channels) — Unidirectional payment channels: the on-chain settlement layer behind x402 `upto` and MPP `session`.
+- [pay CLI (GitHub)](https://github.com/solana-foundation/pay) — Source for the `pay` CLI, MCP server, and payment debugger.

@@ -1,4 +1,5 @@
 // x402 client - lab solution for Module 10 (Agentic Payments).
+// Built on @solana/kit (Web3.js 2.0).
 //
 // Flow:
 //   1. GET /premium                      -> expect 402 + PaymentRequirements
@@ -11,18 +12,24 @@
 // Run with --reuse-jwt to only exercise step 5 against a saved token.
 
 import {
-  Connection,
-  Keypair,
-  PublicKey,
-  Transaction,
-} from "@solana/web3.js";
+  createSolanaRpc,
+  createKeyPairSignerFromBytes,
+  address,
+  pipe,
+  createTransactionMessage,
+  setTransactionMessageFeePayerSigner,
+  setTransactionMessageLifetimeUsingBlockhash,
+  appendTransactionMessageInstructions,
+  signTransactionMessageWithSigners,
+  getBase64EncodedWireTransaction,
+} from "@solana/kit";
 import {
-  createTransferInstruction,
-  createAssociatedTokenAccountInstruction,
-  getAssociatedTokenAddressSync,
-  getAccount,
-} from "@solana/spl-token";
-import { readFileSync, writeFileSync, existsSync } from "fs";
+  findAssociatedTokenPda,
+  getCreateAssociatedTokenIdempotentInstruction,
+  getTransferInstruction,
+  TOKEN_PROGRAM_ADDRESS,
+} from "@solana-program/token";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import {
   RPC_URL,
   SERVER_PORT,
@@ -34,11 +41,12 @@ import {
 const ENDPOINT = `http://localhost:${SERVER_PORT}/premium`;
 const JWT_FILE = "./session-token.json";
 
-const connection = new Connection(RPC_URL, "confirmed");
+const rpc = createSolanaRpc(RPC_URL);
+
 // Override with your own wallet, e.g. the Solana CLI default:
 //   WALLET_PATH=~/.config/solana/id.json npm run client
 const WALLET_PATH = process.env.WALLET_PATH ?? "./client-wallet.json";
-const payer = Keypair.fromSecretKey(
+const payer = await createKeyPairSignerFromBytes(
   Uint8Array.from(JSON.parse(readFileSync(WALLET_PATH, "utf-8")))
 );
 
@@ -83,55 +91,47 @@ async function run() {
   console.log(`  amount: ${terms.amountUi} tokens (${terms.amount} base units)`);
   console.log(`  payTo:  ${terms.payTo}`);
 
-  const mint = new PublicKey(terms.mint);
-  const recipientTokenAccount = new PublicKey(terms.payTo);
-  const recipientWallet = new PublicKey(terms.recipientWallet);
-  const payerTokenAccount = getAssociatedTokenAddressSync(
+  const mint = address(terms.mint);
+  const recipientTokenAccount = address(terms.payTo);
+  const recipientWallet = address(terms.recipientWallet);
+  const [payerTokenAccount] = await findAssociatedTokenPda({
     mint,
-    payer.publicKey
-  );
-
-  // 2) Build the transfer. Create the recipient ATA in the same transaction
-  //    if it does not exist yet (a classic Module 7 lesson).
-  const { blockhash, lastValidBlockHeight } =
-    await connection.getLatestBlockhash();
-  const tx = new Transaction({
-    feePayer: payer.publicKey,
-    blockhash,
-    lastValidBlockHeight,
+    owner: payer.address,
+    tokenProgram: TOKEN_PROGRAM_ADDRESS,
   });
 
-  let recipientExists = true;
-  try {
-    await getAccount(connection, recipientTokenAccount);
-  } catch {
-    recipientExists = false;
-  }
-  if (!recipientExists) {
-    console.log("Recipient ATA missing - adding create instruction");
-    tx.add(
-      createAssociatedTokenAccountInstruction(
-        payer.publicKey,
-        recipientTokenAccount,
-        recipientWallet,
-        mint
-      )
-    );
-  }
+  // 2) Build the transfer. The idempotent ATA instruction creates the
+  //    recipient token account only if it does not exist yet - no
+  //    existence check needed (a classic Module 7 lesson, now one line).
+  const instructions = [
+    getCreateAssociatedTokenIdempotentInstruction({
+      payer,
+      ata: recipientTokenAccount,
+      owner: recipientWallet,
+      mint,
+    }),
+    getTransferInstruction({
+      source: payerTokenAccount,
+      destination: recipientTokenAccount,
+      authority: payer,
+      amount: BigInt(terms.amount),
+    }),
+  ];
 
-  tx.add(
-    createTransferInstruction(
-      payerTokenAccount,
-      recipientTokenAccount,
-      payer.publicKey,
-      terms.amount
-    )
-  );
+  const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
 
   // 3) Sign locally. Deliberately not submitted - the server broadcasts it,
   //    which gives the server control over settlement timing.
-  tx.sign(payer);
-  const serializedTransaction = tx.serialize().toString("base64");
+  const transactionMessage = pipe(
+    createTransactionMessage({ version: 0 }),
+    (tx) => setTransactionMessageFeePayerSigner(payer, tx),
+    (tx) => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx),
+    (tx) => appendTransactionMessageInstructions(instructions, tx)
+  );
+  const signedTransaction =
+    await signTransactionMessageWithSigners(transactionMessage);
+  const serializedTransaction =
+    getBase64EncodedWireTransaction(signedTransaction);
   console.log("Transaction signed (not submitted)");
 
   // 4) Retry with the X-PAYMENT header (base64-encoded JSON, x402 standard).

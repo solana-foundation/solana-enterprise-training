@@ -1,4 +1,5 @@
 // x402 server - lab solution for Module 10 (Agentic Payments).
+// Built on @solana/kit (Web3.js 2.0).
 //
 // Implements the full self-verified flow (no facilitator):
 //   1. GET /premium without X-PAYMENT  -> 402 + PaymentRequirements
@@ -12,12 +13,20 @@
 
 import express from "express";
 import jwt from "jsonwebtoken";
-import { Connection, Keypair, Transaction } from "@solana/web3.js";
 import {
-  TOKEN_PROGRAM_ID,
-  getAssociatedTokenAddressSync,
-} from "@solana/spl-token";
-import { readFileSync } from "fs";
+  createSolanaRpc,
+  createKeyPairSignerFromBytes,
+  getBase64Encoder,
+  getTransactionDecoder,
+  getCompiledTransactionMessageDecoder,
+  type Base64EncodedWireTransaction,
+  type Signature,
+} from "@solana/kit";
+import {
+  findAssociatedTokenPda,
+  TOKEN_PROGRAM_ADDRESS,
+} from "@solana-program/token";
+import { readFileSync } from "node:fs";
 import {
   RPC_URL,
   TOKEN_MINT,
@@ -31,18 +40,19 @@ import {
   NETWORK,
 } from "./config.js";
 
-const connection = new Connection(RPC_URL, "confirmed");
+const rpc = createSolanaRpc(RPC_URL);
 
 // Override with SERVER_WALLET_PATH if desired.
 const SERVER_WALLET_PATH =
   process.env.SERVER_WALLET_PATH ?? "./server-wallet.json";
-const serverKeypair = Keypair.fromSecretKey(
+const serverSigner = await createKeyPairSignerFromBytes(
   Uint8Array.from(JSON.parse(readFileSync(SERVER_WALLET_PATH, "utf-8")))
 );
-const RECIPIENT_TOKEN_ACCOUNT = getAssociatedTokenAddressSync(
-  TOKEN_MINT,
-  serverKeypair.publicKey
-);
+const [RECIPIENT_TOKEN_ACCOUNT] = await findAssociatedTokenPda({
+  mint: TOKEN_MINT,
+  owner: serverSigner.address,
+  tokenProgram: TOKEN_PROGRAM_ADDRESS,
+});
 
 const app = express();
 
@@ -62,11 +72,9 @@ function premiumContent() {
 // Lab step 3: JWT session - one payment buys a window of access
 // ---------------------------------------------------------------------------
 function issueSessionToken(paymentSignature: string): string {
-  return jwt.sign(
-    { scope: "premium", paymentSignature },
-    JWT_SECRET,
-    { expiresIn: SESSION_TTL_SECONDS }
-  );
+  return jwt.sign({ scope: "premium", paymentSignature }, JWT_SECRET, {
+    expiresIn: SESSION_TTL_SECONDS,
+  });
 }
 
 function verifySessionToken(header: string | undefined): boolean {
@@ -77,6 +85,31 @@ function verifySessionToken(header: string | undefined): boolean {
   } catch {
     return false;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Poll signature status until the requested commitment is reached
+// ---------------------------------------------------------------------------
+async function confirmSignature(
+  signature: Signature,
+  timeoutMs = 60_000
+): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const { value } = await rpc.getSignatureStatuses([signature]).send();
+    const status = value[0];
+    if (status?.err) {
+      throw new Error(`Transaction failed on-chain: ${JSON.stringify(status.err)}`);
+    }
+    if (
+      status?.confirmationStatus === "confirmed" ||
+      status?.confirmationStatus === "finalized"
+    ) {
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 1_000));
+  }
+  throw new Error("Timed out waiting for confirmation");
 }
 
 // ---------------------------------------------------------------------------
@@ -100,11 +133,11 @@ app.get("/premium", async (req, res) => {
         {
           scheme: SCHEME,
           network: NETWORK,
-          amount: PRICE_BASE_UNITS,
-          amountUi: PRICE_BASE_UNITS / 10 ** TOKEN_DECIMALS,
-          mint: TOKEN_MINT.toBase58(),
-          payTo: RECIPIENT_TOKEN_ACCOUNT.toBase58(),
-          recipientWallet: serverKeypair.publicKey.toBase58(),
+          amount: Number(PRICE_BASE_UNITS),
+          amountUi: Number(PRICE_BASE_UNITS) / 10 ** TOKEN_DECIMALS,
+          mint: TOKEN_MINT,
+          payTo: RECIPIENT_TOKEN_ACCOUNT,
+          recipientWallet: serverSigner.address,
         },
       ],
       description: "Premium market data",
@@ -129,24 +162,42 @@ app.get("/premium", async (req, res) => {
       });
     }
 
-    const txBuffer = Buffer.from(
-      proof.payload.serializedTransaction,
-      "base64"
-    );
-    const tx = Transaction.from(txBuffer);
+    const wireTransaction = proof.payload
+      .serializedTransaction as Base64EncodedWireTransaction;
 
     // 2) Introspect the instruction bytes - never trust client-claimed
     //    fields. SPL Token Transfer layout: data[0] = 3, data[1..8] = amount
-    //    (u64 LE); keys = [source, destination, owner].
+    //    (u64 LE); accounts = [source, destination, owner].
+    const wireBytes = getBase64Encoder().encode(wireTransaction);
+    const decodedTx = getTransactionDecoder().decode(wireBytes);
+    const message = getCompiledTransactionMessageDecoder().decode(
+      decodedTx.messageBytes
+    );
+    // Narrow away the v1 transaction format, which compiles differently.
+    if (!("instructions" in message)) {
+      return res
+        .status(402)
+        .json({ error: "Unsupported transaction message format" });
+    }
+
     let validTransfer = false;
-    let claimedAmount = 0;
-    for (const ix of tx.instructions) {
-      if (!ix.programId.equals(TOKEN_PROGRAM_ID)) continue;
-      if (ix.data.length < 9 || ix.data[0] !== 3) continue;
-      claimedAmount = Number(ix.data.readBigUInt64LE(1));
-      const destination = ix.keys[1]?.pubkey;
+    let claimedAmount = 0n;
+    for (const ix of message.instructions) {
+      const programAddress =
+        message.staticAccounts[ix.programAddressIndex];
+      if (programAddress !== TOKEN_PROGRAM_ADDRESS) continue;
+      const data = ix.data;
+      if (!data || data.length < 9 || data[0] !== 3) continue;
+      claimedAmount = new DataView(
+        data.buffer,
+        data.byteOffset,
+        data.byteLength
+      ).getBigUint64(1, true);
+      const destinationIndex = ix.accountIndices?.[1];
+      if (destinationIndex === undefined) continue;
+      const destination = message.staticAccounts[destinationIndex];
       if (
-        destination?.equals(RECIPIENT_TOKEN_ACCOUNT) &&
+        destination === RECIPIENT_TOKEN_ACCOUNT &&
         claimedAmount >= PRICE_BASE_UNITS
       ) {
         validTransfer = true;
@@ -155,13 +206,18 @@ app.get("/premium", async (req, res) => {
     }
     if (!validTransfer) {
       return res.status(402).json({
-        error: "No valid token transfer to the quoted account for the quoted amount",
+        error:
+          "No valid token transfer to the quoted account for the quoted amount",
       });
     }
-    console.log(`Instruction verified: ${claimedAmount} base units -> ${RECIPIENT_TOKEN_ACCOUNT.toBase58()}`);
+    console.log(
+      `Instruction verified: ${claimedAmount} base units -> ${RECIPIENT_TOKEN_ACCOUNT}`
+    );
 
     // 3) Simulate before submitting - reject failures without broadcasting.
-    const simulation = await connection.simulateTransaction(tx);
+    const simulation = await rpc
+      .simulateTransaction(wireTransaction, { encoding: "base64" })
+      .send();
     if (simulation.value.err) {
       return res.status(402).json({
         error: "Transaction simulation failed",
@@ -173,44 +229,39 @@ app.get("/premium", async (req, res) => {
 
     // 4) Submit and wait for confirmed commitment. The chain rejects
     //    duplicate signatures, so a proof cannot be replayed.
-    const signature = await connection.sendRawTransaction(txBuffer, {
-      skipPreflight: false,
-      preflightCommitment: "confirmed",
-    });
+    const signature = await rpc
+      .sendTransaction(wireTransaction, {
+        encoding: "base64",
+        preflightCommitment: "confirmed",
+      })
+      .send();
     console.log(`Submitted: ${signature}`);
-    const confirmation = await connection.confirmTransaction(
-      signature,
-      "confirmed"
-    );
-    if (confirmation.value.err) {
-      return res.status(402).json({
-        error: "Transaction failed on-chain",
-        details: confirmation.value.err,
-      });
-    }
+    await confirmSignature(signature);
 
     // 5) Verify actual balance changes from transaction metadata - the
     //    amount received is the ground truth, not the instruction contents.
-    const confirmedTx = await connection.getTransaction(signature, {
-      commitment: "confirmed",
-      maxSupportedTransactionVersion: 0,
-    });
+    const confirmedTx = await rpc
+      .getTransaction(signature, {
+        commitment: "confirmed",
+        maxSupportedTransactionVersion: 0,
+        encoding: "json",
+      })
+      .send();
     if (!confirmedTx?.meta) {
       return res
         .status(402)
         .json({ error: "Could not fetch confirmed transaction" });
     }
+    const accountKeys = confirmedTx.transaction.message.accountKeys;
     const post = confirmedTx.meta.postTokenBalances ?? [];
     const pre = confirmedTx.meta.preTokenBalances ?? [];
-    let amountReceived = 0;
+    let amountReceived = 0n;
     for (const pb of post) {
-      const key =
-        confirmedTx.transaction.message.staticAccountKeys[pb.accountIndex];
-      if (!key?.equals(RECIPIENT_TOKEN_ACCOUNT)) continue;
+      if (accountKeys[pb.accountIndex] !== RECIPIENT_TOKEN_ACCOUNT) continue;
       const before = pre.find((p) => p.accountIndex === pb.accountIndex);
       amountReceived =
-        Number(pb.uiTokenAmount.amount) -
-        Number(before?.uiTokenAmount.amount ?? "0");
+        BigInt(pb.uiTokenAmount.amount) -
+        BigInt(before?.uiTokenAmount.amount ?? "0");
       break;
     }
     if (amountReceived < PRICE_BASE_UNITS) {
@@ -219,7 +270,7 @@ app.get("/premium", async (req, res) => {
       });
     }
     console.log(
-      `Payment verified: ${amountReceived / 10 ** TOKEN_DECIMALS} tokens received`
+      `Payment verified: ${Number(amountReceived) / 10 ** TOKEN_DECIMALS} tokens received`
     );
 
     // Payment verified - serve content and issue the session JWT.
@@ -229,7 +280,7 @@ app.get("/premium", async (req, res) => {
       paidVia: "x402-payment",
       paymentDetails: {
         signature,
-        amountBaseUnits: amountReceived,
+        amountBaseUnits: Number(amountReceived),
         explorerUrl: `https://explorer.solana.com/tx/${signature}?cluster=devnet`,
       },
       // Lab step 3: reuse this for SESSION_TTL_SECONDS without paying again.
@@ -247,8 +298,8 @@ app.get("/premium", async (req, res) => {
 
 app.listen(SERVER_PORT, () => {
   console.log(`x402 server listening on :${SERVER_PORT}`);
-  console.log(`Recipient token account: ${RECIPIENT_TOKEN_ACCOUNT.toBase58()}`);
+  console.log(`Recipient token account: ${RECIPIENT_TOKEN_ACCOUNT}`);
   console.log(
-    `Price: ${PRICE_BASE_UNITS} base units (${PRICE_BASE_UNITS / 10 ** TOKEN_DECIMALS} tokens)`
+    `Price: ${PRICE_BASE_UNITS} base units (${Number(PRICE_BASE_UNITS) / 10 ** TOKEN_DECIMALS} tokens)`
   );
 });
