@@ -20,6 +20,7 @@ This training program is structured into several modules that progressively buil
 | 7 | [Payments](module-7-payments/) | Enterprise payment infrastructure, batch transfers, and cross-border settlement |
 | 8 | [Privacy on Solana](module-8-privacy-on-solana/) | Confidential Transfers, Contra payment channels, and Solana Permissioned Environments |
 | 9 | [Indexing on Solana](module-9-indexing-on-solana/) | Geyser, Yellowstone gRPC, indexing frameworks, storage strategies, and real-time streaming |
+| 10 | [Agentic Payments](module-10-agentic-payments/) | Machine-to-machine micropayments with the x402 protocol, facilitators, and the agent commerce ecosystem |
 
 ## Prerequisites
 
@@ -77,8 +78,12 @@ enterprise-training/
 │   ├── README.md
 │   ├── examples/
 │   └── challenge/
-└── module-9-indexing-on-solana/
+├── module-9-indexing-on-solana/
+│   ├── README.md
+│   ├── examples/
+│   └── challenge/
+└── module-10-agentic-payments/
     ├── README.md
-    ├── examples/
-    └── challenge/
+    ├── Agentic Payments - Slides.pptx
+    └── examples/
 ```

@@ -1,0 +1,25 @@
+{
+  "name": "x402-devnet-example",
+  "version": "2.0.0",
+  "description": "Minimal x402 payment flow on Solana devnet - server, client, and JWT session improvement. Built on @solana/kit. Lab solution for Module 10 (Agentic Payments).",
+  "type": "module",
+  "scripts": {
+    "setup": "tsx setup.ts",
+    "server": "tsx server.ts",
+    "client": "tsx client.ts",
+    "client:jwt": "tsx client.ts --reuse-jwt"
+  },
+  "dependencies": {
+    "@solana-program/token": "^0.15.0",
+    "@solana/kit": "^7.0.0",
+    "express": "^4.19.0",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  }
+}
