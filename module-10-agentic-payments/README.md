@@ -8,7 +8,7 @@
 - Understand the role of facilitators and the trade-offs of using one versus self-managed verification
 - Implement a minimal x402 server that verifies and settles SPL token payments
 - Implement a minimal x402 client that constructs, signs, and submits payment proofs
-- Contrast x402 with MPP (Machine Payments Protocol) and explain how payment channels reduce n payments to two on-chain transactions
+- Contrast x402 with MPP (Machine Payments Protocol) and explain how tabs reduce n payments to two on-chain transactions
 - Evaluate the x402 tooling ecosystem (Corbits, MCPay, PayAI, Coinbase reference implementation, ACK, A2A)
 - Identify enterprise use cases: API metering, MCP server monetization, agent-to-agent commerce, and pay-per-use data services
 
@@ -23,7 +23,7 @@
 - Server-side implementation
 - Client-side implementation
 - Verification and security considerations
-- pay.sh: payments for HTTP agents and CLI tools; MPP and payment channels
+- pay.sh: payments for HTTP agents and CLI tools; MPP and tabs
 - The x402 tooling ecosystem
 - Enterprise use cases
 
@@ -299,11 +299,11 @@ pay curl https://debugger.pay.sh/mpp/quote/AAPL
 
 The takeaway for architects: the challenge-negotiation layer is still standardizing (x402, MPP, and Google's AP2 all target the same gap), but they converge on the same fundamentals — HTTP-native negotiation, stablecoin settlement on Solana, and wallet-authorized signing. Server-side verification logic (Section 9) is largely protocol-independent.
 
-### Payment channels: one settlement for many payments
+### Tabs: one settlement for many payments
 
 Per-request on-chain settlement has a floor: every request costs one transaction fee and one confirmation round-trip. For **metered, streamed, or very-high-frequency** payments — per-token LLM billing, per-second streaming, thousands of calls in a session — even sub-cent fees and sub-second finality become the bottleneck.
 
-The Solana Foundation's [payment-channels](https://github.com/solana-foundation/payment-channels) program is the primitive that removes that floor: **unidirectional payment channels** where one `open` and one `settle` replace a transaction per payment. It is a small Pinocchio program over SPL Token / Token-2022, live on mainnet ([`CHNLxYvVA28MJP9PrFuDXccuoGXAx7jBacfLEkahyGsX`](https://explorer.solana.com/address/CHNLxYvVA28MJP9PrFuDXccuoGXAx7jBacfLEkahyGsX)).
+The Solana Foundation's [tabs](https://github.com/solana-foundation/tabs) program is the primitive that removes that floor: **unidirectional tabs** where one `open` and one `settle` replace a transaction per payment. It is a small Pinocchio program over SPL Token / Token-2022, live on mainnet ([`CHNLxYvVA28MJP9PrFuDXccuoGXAx7jBacfLEkahyGsX`](https://explorer.solana.com/address/CHNLxYvVA28MJP9PrFuDXccuoGXAx7jBacfLEkahyGsX)).
 
 **How it works:**
 
@@ -393,5 +393,5 @@ Note: the example code is unaudited demonstration code — the lab is about prot
 - [x402scan](https://x402scan.com/) — Ecosystem explorer and analytics.
 - [pay.sh docs](https://pay.sh/docs) — CLI payment layer installation and usage.
 - [MPP specification (draft-solana-charge)](https://paymentauth.org/draft-solana-charge-00.html/) — The Machine Payments Protocol.
-- [payment-channels (Solana Foundation)](https://github.com/solana-foundation/payment-channels) — Unidirectional payment channels: the on-chain settlement layer behind x402 `upto` and MPP `session`.
+- [tabs (Solana Foundation)](https://github.com/solana-foundation/tabs) — Unidirectional tabs: the on-chain settlement layer behind x402 `upto` and MPP `session`.
 - [pay CLI (GitHub)](https://github.com/solana-foundation/pay) — Source for the `pay` CLI, MCP server, and payment debugger.
