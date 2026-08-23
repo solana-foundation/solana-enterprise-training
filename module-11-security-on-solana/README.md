@@ -32,9 +32,9 @@ Module 1B's security section is a compressed preview of the material covered in 
 
 [Placeholder — Security on Solana slide deck to be created]
 
-## Example
+## Challenge
 
-See the [examples/](examples/) folder for the annotated vulnerable-and-fixed program pairs used throughout this module.
+See the [challenge/](challenge/) folder for a small challenge regarding an Anchor staking vault with seven planted vulnerabilities.
 
 ---
 

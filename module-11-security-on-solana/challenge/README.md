@@ -30,6 +30,5 @@ Work through the account structs first — most findings are unpinned accounts v
 - Count of findings is given (7 checklist) so you know when to keep looking
 - Assume the caller is fully hostile (Module 11, Section 2)
 
-```
 
 When you are done, compare against [SOLUTION.md](SOLUTION.md).
