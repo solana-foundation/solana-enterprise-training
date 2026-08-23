@@ -85,10 +85,8 @@ enterprise-training/
 │   └── challenge/
 ├── module-10-agentic-payments/
 │   ├── README.md
-│   ├── Agentic Payments - Slides.pptx
 │   └── examples/
 └── module-11-security-on-solana/
     ├── README.md
-    ├── Agentic Payments - Slides.pptx
-    └── examples/
+    └── challenge/
 ```
