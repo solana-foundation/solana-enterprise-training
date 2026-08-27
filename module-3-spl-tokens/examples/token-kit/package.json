@@ -1,0 +1,19 @@
+{
+  "name": "token-kit",
+  "version": "1.0.0",
+  "description": "Create an SPL token mint and mint tokens using @solana/kit",
+  "type": "module",
+  "scripts": {
+    "mint-tokens": "npx tsx src/mint-tokens.ts"
+  },
+  "dependencies": {
+    "@solana/kit": "^7.1.1",
+    "@solana-program/system": "^0.13.0",
+    "@solana-program/token": "^0.15.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.3"
+  }
+}

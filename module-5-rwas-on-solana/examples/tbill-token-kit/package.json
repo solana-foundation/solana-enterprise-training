@@ -1,0 +1,25 @@
+{
+  "name": "tbill-token-kit",
+  "version": "1.0.0",
+  "description": "Tokenized T-bill fund share built entirely from Token-2022 extensions - no custom program",
+  "type": "module",
+  "scripts": {
+    "create-tbill": "npx tsx src/01-create-tbill.ts",
+    "onboard-investor": "npx tsx src/02-onboard-investor.ts",
+    "issue": "npx tsx src/03-issue.ts",
+    "nav-update": "npx tsx src/04-nav-update.ts",
+    "seize": "npx tsx src/05-seize.ts",
+    "redeem": "npx tsx src/06-redeem.ts",
+    "all": "npm run create-tbill && npm run onboard-investor && npm run issue && npm run nav-update && npm run seize && npm run redeem"
+  },
+  "dependencies": {
+    "@solana/kit": "^7.1.1",
+    "@solana-program/system": "^0.13.0",
+    "@solana-program/token-2022": "^0.15.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.3"
+  }
+}
