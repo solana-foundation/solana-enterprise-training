@@ -21,6 +21,10 @@ By the end of this module, participants will be able to:
 - Batch payments and transaction atomicity
 - Enterprise use cases
 
+## See also
+
+[Module 7B: Subscriptions and Recurring Payments](../module-7b-subscriptions/) - pull payments, the Subscriptions Delegation Program, and running a collector. Companion to this module.
+
 ## Slides
 
 [Payments on Solana slides](https://docs.google.com/presentation/d/1r0NH_Wl8IaxayDh_cKcUzPIfKqaiCahvILANlokdHgg/edit?usp=sharing)

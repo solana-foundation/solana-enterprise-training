@@ -21,8 +21,8 @@ custom-panic = []
 
 
 [dependencies]
-anchor-lang = { version = "1.0.0", features = ["init-if-needed", "event-cpi"] }
-anchor-spl  = "1.0.0"
+anchor-lang = { version = "1.1.2", features = ["init-if-needed", "event-cpi"] }
+anchor-spl  = "1.1.2"
 # Direct dependency for the PermissionedBurn mint extension: anchor-spl 1.x
 # pins spl-token-2022-interface 2.x internally, which predates the extension.
 # The 3.x types coexist with anchor-spl's copy; never mix types across the
