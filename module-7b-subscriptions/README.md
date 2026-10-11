@@ -37,7 +37,7 @@ Module 7 (Payments on Solana) - wallets, ATAs, transaction construction, fee pay
 
 ## Slides
 
-[Placeholder - Subscriptions slide deck to be created]
+[Subscriptions - Slides](https://docs.google.com/presentation/d/1BPzIbxFOhRvmoB7Qwcpcmib2eSL7WFlht6LGYzJQjkc/edit?usp=sharing)
 
 ## Example
 
@@ -282,17 +282,12 @@ They compose. A pay.sh gateway can put an HTTP API behind a subscription plan so
 
 Run the full plan lifecycle against a local validator or devnet using the [example](examples/subscription-plan/).
 
-- **Time:** 60-90 minutes
 - **Steps:**
   1. Merchant creates a plan (5 USDC / 30 days, one puller, destination allowlist)
   2. Subscriber initializes a Subscription Authority and subscribes; inspect the token account - the delegate is the authority PDA, not the merchant
   3. Puller collects; then attempt a second collection in the same period and read the rejection
   4. Subscriber cancels; collect again before period end (succeeds), then after (fails); revoke
   5. Attempt `updatePlan` with stale `expected*` fields and observe `StalePlanApproval`
-- **Instructor checkpoints:**
-  1. Can the participant explain why the token account has one delegate but two active arrangements?
-  2. Did they identify which party signs each lifecycle instruction, and why cancel-now needs both?
-  3. Can they map the stale-approval errors back to the Module 5 action-binding pattern?
 
 ## Additional resources
 
