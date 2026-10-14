@@ -18,6 +18,7 @@ This training program is structured into several modules that progressively buil
 | 5 | [RWAs on Solana](module-5-rwas-on-solana/) | Real world asset tokenization, compliance infrastructure, and DeFi composability |
 | 6 | [DeFi on Solana](module-6-defi-on-solana/) | DeFi primitives, major protocols, and enterprise applications |
 | 7 | [Payments](module-7-payments/) | Enterprise payment infrastructure, batch transfers, and cross-border settlement |
+| 7B | [Subscriptions](module-7b-subscriptions/) | Pull payments on a push-only chain: the Subscriptions Delegation Program, fixed and recurring delegations, subscription plans, and running a collector |
 | 8 | [Privacy on Solana](module-8-privacy-on-solana/) | Confidential Transfers, Contra payment channels, and Solana Permissioned Environments |
 | 9 | [Indexing on Solana](module-9-indexing-on-solana/) | Geyser, Yellowstone gRPC, indexing frameworks, storage strategies, and real-time streaming |
 | 10 | [Agentic Payments](module-10-agentic-payments/) | Machine-to-machine micropayments with the x402 protocol, facilitators, and the agent commerce ecosystem |
@@ -35,7 +36,7 @@ Understanding of general programming concepts and basic familiarity with blockch
 ## Getting Started
 
 1. Review the [Course Plan](course-plan.md) for an overview of the full curriculum
-2. Work through the modules in order, starting with [Module 1: Solana Overview](module-1-solana-overview/)
+2. Work through the modules as per your needs, starting with [Module 1: Solana Overview](module-1-solana-overview/)
 3. Complete the hands-on exercises and challenges in each module before proceeding to the next
 
 ## Repository Structure
@@ -72,6 +73,10 @@ enterprise-training/
 │   ├── examples/
 │   └── challenge/
 ├── module-7-payments/
+│   ├── README.md
+│   ├── examples/
+│   └── challenge/
+├── module-7b-subscriptions/
 │   ├── README.md
 │   ├── examples/
 │   └── challenge/

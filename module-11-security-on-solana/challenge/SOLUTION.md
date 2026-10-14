@@ -1,6 +1,6 @@
 # Solution: Staking Vault Audit
 
-Eight findings — seven checklist vulnerabilities plus one economics bug. Each maps to a Module 11 Section 3 item and a real-world case study.
+Eight findings — seven checklist vulnerabilities. Each maps to a Module 11 Section 3 item and a real-world case study.
 
 ---
 

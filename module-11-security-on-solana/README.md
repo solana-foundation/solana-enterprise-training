@@ -30,7 +30,7 @@ Module 1B's security section is a compressed preview of the material covered in 
 
 ## Slides
 
-[Placeholder — Security on Solana slide deck to be created]
+[Security on Solana — Slides](https://docs.google.com/presentation/d/141W4WGYF5ZhbLjD_wipM_WMH3vwQgW3Qr5KY-PhR5ho/edit?usp=sharing)
 
 ## Challenge
 
