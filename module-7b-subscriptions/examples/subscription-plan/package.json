@@ -1,0 +1,27 @@
+{
+  "name": "subscription-plan-example",
+  "version": "1.0.0",
+  "description": "Module 7B lab - subscription plan lifecycle on the Solana Subscriptions Delegation Program with @solana/kit.",
+  "type": "module",
+  "scripts": {
+    "setup": "tsx setup.ts",
+    "create-plan": "tsx 1-create-plan.ts",
+    "subscribe": "tsx 2-subscribe.ts",
+    "collect": "tsx 3-collect.ts",
+    "cancel": "tsx 4-cancel.ts",
+    "revoke": "tsx 5-revoke.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@solana-program/token": "0.15.0",
+    "@solana/kit": "^7.1.0",
+    "@solana/kit-plugin-rpc": "0.17.0",
+    "@solana/kit-plugin-signer": "0.17.0",
+    "@solana/subscriptions": "0.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  }
+}

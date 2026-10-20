@@ -21,8 +21,8 @@ custom-panic = []
 
 
 [dependencies]
-anchor-lang = "1.0.0"
-anchor-spl  = "1.0.0"
+anchor-lang = "1.1.2"
+anchor-spl  = "1.1.2"
 
 spl-tlv-account-resolution = "0.11.1"
 spl-discriminator           = "0.5.2"
