@@ -21,7 +21,7 @@ The course is divided into instructor-led modules that build on each other and a
 
 **Topics:**
 - Why Solana: market position, stablecoin adoption, and enterprise traction
-- Solana architecture: Proof of History, Gulf Stream, Turbine, Tower BFT
+- Solana architecture: Gulf Stream, Sealevel, Turbine, Alpenglow (Votor) consensus - and what it retired (Proof of History, Tower BFT)
 - Key differences from EVM: stateless programs, parallel execution, no re-entrancy
 - The Solana data model: accounts, programs, rent, and compute units
 - Transactions, instructions, and the lifecycle of a transaction
@@ -139,7 +139,7 @@ Companion to Module 1 for EVM-native teams; runnable as a standalone session.
 - Operating a collector: scheduling, failure taxonomy, dunning vs. compliance holds, events
 - Choosing between x402 per-request, channels, and subscriptions
 
-**Slides:** [Link to Subscriptions slides - PLACEHOLDER]
+**Slides:** [Subscriptions slides](https://docs.google.com/presentation/d/1BPzIbxFOhRvmoB7Qwcpcmib2eSL7WFlht6LGYzJQjkc/edit?usp=sharing)
 
 ### Module 8 - Privacy on Solana
 
