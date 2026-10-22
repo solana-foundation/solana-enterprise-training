@@ -3,7 +3,8 @@
 ## Learning Objectives
 
 - Articulate why Solana has emerged as the leading platform for enterprise and financial infrastructure
-- Describe Solana's core architecture, including Proof of History, Gulf Stream, Turbine, and Tower BFT
+- Describe Solana's core architecture, including Gulf Stream, Sealevel, Turbine, and Alpenglow (Votor) consensus
+- Explain what the Alpenglow upgrade changed: the retirement of Proof of History and Tower BFT, off-chain voting, and sub-second finality
 - Identify the key differences between Solana's programming model and EVM-based chains
 - Explain the Solana account model, including accounts, programs, rent, and Program Derived Addresses
 - Trace the lifecycle of a transaction from client to on-chain execution
@@ -39,9 +40,12 @@ Solana's core insight is a fundamentally different approach to transaction order
 
 Traditional blockchains like Ethereum process transactions sequentially - each must complete before the next begins. This creates a bottleneck: approximately 15 TPS, 12-second block times, and unpredictable fees.
 
-Solana separates ordering from execution. Proof of History (PoH) creates a cryptographic clock that proves the ordering of events mathematically, eliminating the need for validators to negotiate sequence. This enables parallel execution of non-conflicting transactions across multiple cores.
+Solana takes a different approach on two fronts. First, a **pre-computed leader schedule** means everyone knows in advance which validator produces each ~400ms slot, so transactions are forwarded straight to the right block producer instead of sitting in a global mempool. Second, every transaction **declares upfront which accounts it reads and writes**, so the runtime can execute non-conflicting transactions in parallel across multiple cores.
 
-**The result:** ~3,000+ TPS, 400ms block times, and fees below $0.001.
+**The result:** ~3,000+ TPS, ~400ms slots, finality targeted at ~150ms, and fees below $0.001.
+
+> [!NOTE]
+> **Alpenglow (activated on mainnet on October 21, 2026, epoch 1064).** Solana originally relied on **Proof of History (PoH)**, a continuous SHA-256 hash chain acting as a cryptographic clock, plus **Tower BFT**, a vote-and-lockout consensus where finality took ~12.8 seconds. Alpenglow's first phase, **Votor**, retires both: slots are now paced by fixed timers and local validator timeouts rather than a hash chain, and validators finalize blocks by exchanging votes directly with each other. Finality drops from ~12.8s to a ~150ms target. You will still see PoH and Tower BFT in older docs and talks - treat them as history, not as how mainnet works today.
 
 ## 3. Solana Architecture
 
@@ -49,13 +53,21 @@ Solana's architecture is composed of several interconnected components that work
 
 **Gulf Stream - Transaction Forwarding.** Before a validator becomes leader, other validators and clients already know it is coming thanks to the pre-computed leader schedule. They forward transactions directly to the upcoming leader's memory. By the time the slot starts, the leader has a warm queue ready to execute immediately. There is no idle mempool.
 
-**Block Building - Leader Execution.** The leader takes queued transactions, deduplicates them, and runs them through Sealevel in parallel. As it executes, it weaves the results into the PoH chain - each transaction receives a PoH tick, creating a cryptographic record of ordering and time.
+**Block Building - Leader Execution.** The leader takes queued transactions, deduplicates them, and runs them through Sealevel in parallel. It has a fixed ~400ms slot to build its block; validators use local timeouts to decide when a leader has missed its slot and the slot should be skipped. (Before Alpenglow, the leader also mixed batches of transactions into the Proof of History hash chain, and that chain served as the network's clock. Alpenglow removed PoH from consensus.)
 
-**Turbine - Block Propagation.** The leader cannot send the full block to all validators at once. Turbine breaks the block into small packets and propagates them through a layered tree of validators. Each validator receives its chunk and forwards pieces to a small neighborhood below it - inspired by BitTorrent.
+**Turbine - Block Propagation.** The leader cannot send the full block to all validators at once. Turbine breaks the block into small packets and propagates them through a layered tree of validators. Each validator receives its chunk and forwards pieces to a small neighborhood below it - inspired by BitTorrent. Turbine is still in use after Alpenglow's first phase. A later phase, **Rotor**, will replace it with single-hop, stake-weighted relays; Rotor needs its own SIMD and has no activation date yet.
 
 **Block Verification.** Each validator reassembles the block from Turbine chunks, re-executes the transactions independently, and checks that the resulting state matches what the leader claimed. If anything does not match, the block is rejected.
 
-**Consensus - Tower BFT.** Solana uses Tower BFT, a PoH-aware variant of PBFT. Validators cast votes on blocks by locking their stake behind them. The longer a validator has been voting on a particular fork, the longer its lockout period before it can switch. This makes it economically irrational to flip to a different fork late in the process.
+**Consensus - Alpenglow (Votor).** Validators vote on each block by sending signed vote messages directly to each other - votes are no longer on-chain transactions. Votes are aggregated into compact BLS **certificates**, and a block is finalized in one of two ways, running concurrently:
+
+- **Fast path - one round:** if validators holding at least **80%** of stake vote for the block, it is final immediately.
+- **Slow path - two rounds:** if at least **60%** of stake votes in a first round, a second round at 60% finalizes it.
+
+Whichever path completes first wins, which is how Votor targets ~150ms finality. Because votes no longer occupy block space, every block is now all user transactions. Validators instead pay a **Validator Admission Ticket (VAT)** fee per epoch, deducted from their vote account, to take part in consensus.
+
+> [!NOTE]
+> **What Votor replaced.** Under **Tower BFT**, validators voted with on-chain transactions and locked their stake behind each vote. The longer they voted on a fork, the longer the lockout before they could switch, which made late fork-switching economically irrational. Finality took 32 confirmed blocks, about 12.8 seconds. Tower BFT ran for a 5,000-slot handover window after Alpenglow activated, and then it was retired.
 
 ### Transaction Lifecycle
 
@@ -66,11 +78,10 @@ flowchart TD
     U["User action in an app"] --> RPC["RPC client builds<br/>and submits the transaction"]
     RPC --> GS["<b>Gulf Stream</b><br/>Forwarded directly to the<br/>upcoming leader - no mempool"]
     GS --> LE["<b>Leader: block building</b><br/>Dedup, then Sealevel runs<br/>non-conflicting txs in parallel"]
-    LE --> POH["Results woven into the<br/><b>Proof of History</b> chain"]
-    POH --> TB["<b>Turbine</b><br/>Block split into packets, propagated<br/>through a layered validator tree"]
+    LE --> TB["<b>Turbine</b><br/>Block split into packets, propagated<br/>through a layered validator tree"]
     TB --> VV["<b>Verification</b><br/>Validators reassemble and<br/>re-execute to confirm the state"]
-    VV --> CB["<b>Consensus: Tower BFT</b><br/>Stake-weighted votes with<br/>lockouts commit the block"]
-    CB --> FIN(["Block confirmed<br/>state is committed"])
+    VV --> CB["<b>Consensus: Alpenglow Votor</b><br/>Off-chain votes aggregated into<br/>BLS certificates - 80% fast path<br/>or 2 x 60% slow path"]
+    CB --> FIN(["Block finalized<br/>~150ms target"])
 ```
 
 ## 4. Key Differences from EVM
@@ -87,6 +98,8 @@ Understanding the differences between Solana and EVM-based chains is essential f
 
 **No Mempool.** Gulf Stream forwards transactions directly to the next expected leader. There is no global mempool.
 
+**Finality.** Ethereum blocks become economically final after two epochs, roughly 12.8 minutes. Since Alpenglow, Solana targets ~150ms finality: a block is irreversible about as fast as a web request round-trip.
+
 **Upgradability.** Solana programs are upgradable by default, allowing teams to iterate on deployed programs.
 
 **Fee Model.** Solana uses a base fee per signature (5,000 lamports) plus an optional priority fee, rather than Ethereum's global gas auction.
@@ -97,6 +110,7 @@ Understanding the differences between Solana and EVM-based chains is essential f
 | Execution | Single-threaded | Multi-threaded, parallel |
 | Re-Entrancy | Possible - developer must guard against it | Structurally prevented by the runtime |
 | Transaction Forwarding | Global mempool | Gulf Stream - direct forwarding to leader |
+| Finality | ~12.8 minutes (2 epochs) | ~150ms target (Alpenglow Votor) |
 | Upgradability | Immutable by default (proxy patterns required) | Upgradable by default |
 | Fee Model | Global gas auction | Base fee + optional priority fee |
 
@@ -324,4 +338,7 @@ signature) plus any priority fee, because it consumed validator resources. Faile
 - [Solana Documentation](https://solana.com/docs)
 - [Solana Developer Guides](https://solana.com/developers/guides)
 - [Solana Architecture Overview](https://solana.com/docs/intro/overview)
+- [Alpenglow - Solana upgrade overview](https://solana.com/upgrades/alpenglow)
+- [Alpenglow: Solana's Great Consensus Rewrite (Helius)](https://www.helius.dev/blog/alpenglow)
+- [Agave 4.3 - the release that activated Alpenglow (Helius)](https://www.helius.dev/blog/agave-v4-3)
 - [Solana Developer Report](https://www.developerreport.com/developer-report)

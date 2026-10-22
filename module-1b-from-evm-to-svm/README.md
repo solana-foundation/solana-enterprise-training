@@ -645,12 +645,12 @@ the right one is a daily design decision for any institutional system.
 |------------|---------|------------|-------------|
 | `processed` | < 400 ms | Possible | UI updates, optimistic flows, internal indexing where eventual correction is acceptable. |
 | `confirmed` | ~1 sec | Negligible in practice (supermajority voted) | Default for most production flows. Payment processing, swap confirmation, custody-side transaction recording. |
-| `finalized` | ~12-13 sec | None (irreversible) | Settlement-grade decisions. Anything that triggers an off-chain action that cannot be reversed (release goods, fiat payout, etc.). |
+| `finalized` | ~150 ms target (Alpenglow) | None (irreversible) | Settlement-grade decisions. Anything that triggers an off-chain action that cannot be reversed (release goods, fiat payout, etc.). |
 
 ### Rules of thumb
 
-- **For UI feedback:** `confirmed`. `processed` is too brittle and `finalized`
-  is too slow.
+- **For UI feedback:** `confirmed`. `processed` is too brittle. Before
+  Alpenglow `finalized` was too slow for this; now it is often viable too.
 - **For an indexer:** `confirmed`. If you index `processed`, you must handle
   rare reorgs; the indexing throughput gain is rarely worth the complexity.
 - **For off-chain payouts triggered by an on-chain event:** `finalized`. Do
@@ -661,6 +661,16 @@ the right one is a daily design decision for any institutional system.
 EVM developers will recognize this as similar to choosing how many block
 confirmations to wait for, but the tiers are explicit, discrete, and named —
 which simplifies design conversations.
+
+> [!NOTE]
+> **Alpenglow changed the latency, not the framework.** Before October 21,
+> 2026, Solana ran Tower BFT and `finalized` took ~12-13 seconds, which is
+> why older material treats it as "too slow" for user-facing flows. Alpenglow's
+> Votor (live on mainnet since epoch 1064) finalizes a block as soon as a
+> finality certificate forms, targeting ~150 ms. The commitment-level names and
+> the rules above still apply. What changed is that waiting for `finalized` is
+> now cheap enough to use in places that used to settle for `confirmed`.
+> Revisit any timeouts sized for the old ~13 s figure.
 
 ## 9. Client tooling and developer workflow
 
@@ -806,7 +816,7 @@ Your compliance team asks: "When our on-chain settlement system detects a confir
 <details>
 <summary>Answer</summary>
 
-**C.** When an on-chain event triggers an irreversible off-chain action (fiat payout, goods release, ledger entry), you must wait for `finalized` commitment (~12–13 seconds). A `confirmed` transaction has negligible reorg risk in practice, but "negligible" is not "zero" — and reversing a fiat wire is not an option. The rule: if you can't undo the off-chain consequence, don't act until finalization.
+**C.** When an on-chain event triggers an irreversible off-chain action (fiat payout, goods release, ledger entry), you must wait for `finalized` commitment (~150 ms target since Alpenglow; ~12-13 seconds under the older Tower BFT). A `confirmed` transaction has negligible reorg risk in practice, but "negligible" is not "zero" — and reversing a fiat wire is not an option. The rule: if you can't undo the off-chain consequence, don't act until finalization.
 
 </details>
 
