@@ -12,6 +12,7 @@
 // Demonstration code - unaudited, not production ready.
 
 import express from "express";
+import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
 import {
   createSolanaRpc,
@@ -55,6 +56,10 @@ const [RECIPIENT_TOKEN_ACCOUNT] = await findAssociatedTokenPda({
 });
 
 const app = express();
+
+// Every unauthenticated /premium call can trigger RPC work (simulate, submit,
+// poll), so throttle per client IP to keep the endpoint from draining RPC quota.
+const premiumLimiter = rateLimit({ windowMs: 60_000, limit: 30 });
 
 // ---------------------------------------------------------------------------
 // The protected content - completely payment-unaware
@@ -115,7 +120,7 @@ async function confirmSignature(
 // ---------------------------------------------------------------------------
 // The x402 endpoint
 // ---------------------------------------------------------------------------
-app.get("/premium", async (req, res) => {
+app.get("/premium", premiumLimiter, async (req, res) => {
   // 0) Valid session token? Serve without payment (lab step 3).
   if (verifySessionToken(req.header("Authorization"))) {
     console.log("Valid JWT session - serving without payment");

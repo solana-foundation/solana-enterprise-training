@@ -21,8 +21,8 @@ custom-panic = []
 
 
 [dependencies]
-anchor-lang = "1.0.0"
-anchor-spl = "1.0.0"
+anchor-lang = "1.1.2"
+anchor-spl = "1.1.2"
 # Library defining a generic state interface to encode additional required accounts for an instruction, using Type-Length-Value structures
 spl-tlv-account-resolution = "0.11.1"
 # Library with helper to resolve additional accounts
