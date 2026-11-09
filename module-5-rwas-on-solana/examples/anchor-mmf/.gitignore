@@ -6,3 +6,6 @@ node_modules
 test-ledger
 .yarn
 .surfpool
+app/public/localnet.json
+app/.localnet
+app/dist
