@@ -63,7 +63,7 @@ export function Transfers() {
           <span className="small muted">
             {over > 0n
               ? `This transfer goes ${fmtAmount(over)} MMF over the cap: the hook will reject it.`
-              : "Blue: already sent. Green: this transfer. Striped red would mean over the cap."}
+              : "Violet: already sent. Green: this transfer. Striped red would mean over the cap."}
           </span>
         </div>
 

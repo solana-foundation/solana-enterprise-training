@@ -125,7 +125,7 @@ export function Dashboard() {
         <div className="card">
           <div className="card-head">
             <h3>Programs</h3>
-            <p>The console talks to all five. The violet ones are the external sRFC-37 standard.</p>
+            <p>The console talks to all five. The blue ones are the external sRFC-37 standard.</p>
           </div>
           <div className="table-wrap">
             <table>

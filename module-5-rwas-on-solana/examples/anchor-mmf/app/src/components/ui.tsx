@@ -1,14 +1,12 @@
 import type { ReactNode } from "react";
-import { HOLDER_KEYS, HOLDER_LABEL, HolderKey, PERSONA_INITIALS, PERSONA_LABEL, PersonaKey } from "../lib/constants";
+import { HOLDER_KEYS, HOLDER_LABEL, HolderKey, PERSONA_LABEL, PersonaKey } from "../lib/constants";
 import type { Ix } from "../lib/instructions";
 import type { HolderState } from "../lib/state";
 import { useStore } from "../store";
 
 export function PersonaDot({ k, small }: { k: PersonaKey; small?: boolean }) {
   return (
-    <span className={`dot p-${k}${small ? " sm" : ""}`} aria-hidden="true">
-      {small ? "" : PERSONA_INITIALS[k]}
-    </span>
+    <span className={`dot p-${k}${small ? " sm" : ""}`} aria-hidden="true" />
   );
 }
 
@@ -161,9 +159,16 @@ export function LastResult() {
   );
 }
 
+const SCREEN_ORDER = ["dashboard", "onboarding", "timelock", "transfers", "controls"];
+
 export function ScreenHead({ title, children }: { title: string; children: ReactNode }) {
+  const here = location.hash.replace("#", "") || "dashboard";
+  const n = Math.max(0, SCREEN_ORDER.indexOf(here)) + 1;
   return (
     <div className="screen-head">
+      <p className="eyebrow">
+        Tokenized money-market fund / Step {String(n).padStart(2, "0")} of {String(SCREEN_ORDER.length).padStart(2, "0")}
+      </p>
       <h2>{title}</h2>
       <p>{children}</p>
     </div>

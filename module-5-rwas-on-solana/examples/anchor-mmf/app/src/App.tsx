@@ -3,6 +3,7 @@ import { PERSONA_KEYS, PERSONA_LABEL } from "./lib/constants";
 import { parseEnv, registerNames, type Env, type LocalnetFile } from "./lib/env";
 import { fmtChainTime } from "./lib/format";
 import { Inspector } from "./components/Inspector";
+import { SolanaLogo } from "./components/SolanaLogo";
 import { PersonaDot } from "./components/ui";
 import { Controls } from "./screens/Controls";
 import { Dashboard } from "./screens/Dashboard";
@@ -33,6 +34,7 @@ function useHashRoute(): string {
 function Setup({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="setup">
+      <SolanaLogo className="setup-logo" />
       <h2>{title}</h2>
       {children}
       <pre>{`cd module-5-rwas-on-solana/examples/anchor-mmf
@@ -51,11 +53,13 @@ function TopBar() {
   const now = useChainNow();
   return (
     <header className="topbar">
-      <span className="brand">
-        MMF Console<small>anchor-mmf</small>
-      </span>
-      <span className="chip" title={env.rpcUrl}>
-        localnet · surfpool
+      <a className="brand" href="#dashboard" aria-label="MMF Console home">
+        <SolanaLogo className="brand-logo" />
+        <span className="brand-sep" aria-hidden="true" />
+        <span className="brand-name">MMF Console</span>
+      </a>
+      <span className="chip live" title={env.rpcUrl}>
+        Solana localnet
       </span>
       <span className="chip" title="Clock::unix_timestamp on the localnet">
         chain time {fmtChainTime(now)}
@@ -114,6 +118,12 @@ function Shell() {
         {fund ? screen.el : <p className="muted">Loading the fund…</p>}
         <Inspector />
       </main>
+      <footer className="footer">
+        <SolanaLogo mark className="footer-mark" />
+        <span>Solana Enterprise Training · Tokenized money-market fund</span>
+        <span className="spacer" />
+        <span>Local validator · Test tokens only, no real-world value</span>
+      </footer>
     </>
   );
 }
