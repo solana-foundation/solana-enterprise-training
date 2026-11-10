@@ -191,6 +191,24 @@ cargo test -p mmf-admin --test test_e2e_token_acl
                       # full litesvm flow against the real Token ACL + ABL .so
 ```
 
+## MMF Console (teaching UI)
+
+[`app/`](app/README.md) is a browser console for teaching this example. It
+has personas, onboarding, a timelock board, transfers against the rate limit,
+compliance controls, and a transaction inspector that shows every account and
+PDA seed. It runs on an offline Surfpool localnet that has all five programs
+preloaded:
+
+```bash
+anchor build
+cd app && yarn install
+yarn localnet      # terminal 1
+yarn bootstrap     # terminal 2
+yarn dev           # http://localhost:5173
+```
+
+See [app/README.md](app/README.md) for the screens and a 25-minute class demo.
+
 ## Layout
 
 ```
