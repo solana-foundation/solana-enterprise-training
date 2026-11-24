@@ -6,9 +6,9 @@ By the end of this module, participants will be able to:
 
 - Explain why direct RPC queries are insufficient for production applications and why custom indexes are necessary
 - Differentiate between raw and parsed transaction data and understand why parsing is essential for business logic
-- Describe Solana's Geyser plugin interface and how Yellowstone gRPC enables sub-100ms real-time data streaming
+- Describe Solana's Geyser plugin interface and how Yellowstone gRPC enables low-latency, push-based real-time data streaming
 - Compare indexing frameworks (Carbon, Vixen) and select the appropriate one for a given use case
-- Design a backfill strategy using getTransactionsForAddress, getSignaturesForAddress, or getBlock depending on data requirements
+- Design a backfill strategy using standard RPC methods (getSignaturesForAddress + getTransaction, getBlock) or provider-specific methods such as Helius' getTransactionsForAddress, depending on data requirements
 - Choose between SQL databases, columnar databases, and data lakes based on query patterns, dataset size, and latency needs
 - Implement a real-time sync pipeline using LaserStream or Enhanced WebSockets to keep an index current
 - Build a complete indexer lifecycle: backfill historical data, parse and transform it, store it, and stream updates
@@ -22,6 +22,7 @@ By the end of this module, participants will be able to:
 - Yellowstone gRPC and the Geyser plugin interface
 - Indexing frameworks: Carbon and Vixen
 - Real-time streaming: LaserStream and Enhanced WebSockets
+- Protocol changes that affect indexers (Alpenglow, Agave 4.3 Geyser, v1 transactions)
 - Production indexer architecture
 
 ## Slides
@@ -81,23 +82,27 @@ Parsing is essential for payment systems. You need decimal-adjusted amounts (not
 
 The first step in building an index is populating it with historical data. There are three main approaches, each suited to different access patterns.
 
-### Method 1: getTransactionsForAddress (Recommended)
+### Method 1: getTransactionsForAddress (provider-specific, Helius)
+
+`getTransactionsForAddress` is a Helius-specific RPC method, not part of the standard Solana JSON-RPC API - it only works against Helius endpoints. If you need to stay provider-agnostic, use Method 2 or Method 3, which every RPC provider supports.
 
 This method fetches full transaction details for an address with powerful filtering. You set a timeframe, configure token account inclusion, and paginate through results. On each page, you extract relevant data and store it.
 
 Advantages: single-call simplicity, slot and time-based filters, token account support, reverse search for chronological ordering, and lower credit cost than alternatives.
 
-### Method 2: getSignaturesForAddress + getTransaction
+### Method 2: getSignaturesForAddress + getTransaction (standard RPC)
 
-The traditional approach before getTransactionsForAddress existed. You recursively loop over signatures using `getSignaturesForAddress` (newest to oldest), storing the last signature as a cursor, then call `getTransaction` for each signature to get full details.
+The standard, provider-agnostic approach (and the traditional one before provider-specific methods like getTransactionsForAddress existed). You recursively loop over signatures using `getSignaturesForAddress` (newest to oldest), storing the last signature as a cursor, then call `getTransaction` for each signature to get full details.
 
 Downsides: requires one additional RPC call per transaction, forces newest-to-oldest ordering, needs thread-safe queuing for concurrency, requires manual retry/backoff logic, and does not include associated token account transactions.
 
-### Method 3: getBlock
+### Method 3: getBlock (standard RPC)
 
 Most effective when a high percentage of transactions in your target blocks are relevant - for example, indexing a heavily used program like Token Program or a DeFi protocol. You convert a time range to slot numbers, fetch blocks sequentially, and filter for relevant transactions within each block.
 
 This method is inherently wasteful when only a small fraction of block transactions are relevant to your index. Use it only for high-frequency programs or when address-based filtering cannot capture your target data.
+
+**Historical vote transactions.** Since Alpenglow activated (Oct 21 2026, epoch 1064), votes are off-chain and blocks no longer contain vote transactions. Blocks from before epoch 1064 still do - and they made up a large share of every historical block - so a getBlock backfill that reaches back before epoch 1064 should filter out Vote Program transactions.
 
 ## 5. Storage Strategies
 
@@ -125,13 +130,26 @@ For massive amounts of raw and processed data for long-term archival and ad-hoc 
 
 ## 6. Real-Time Streaming with Geyser and Yellowstone
 
-Geyser is Solana's plugin interface for streaming real-time account and transaction data directly from validators. Instead of polling RPC, you subscribe to a stream that pushes updates as they are processed - providing sub-100ms latency compared to 200-400ms for WebSocket subscriptions.
+Geyser is Solana's plugin interface for streaming real-time account and transaction data directly from validators. Instead of polling RPC, you subscribe to a stream that pushes updates as they are processed - typically delivering data with lower latency than standard RPC WebSocket subscriptions, because updates come straight from the validator rather than through the RPC pub/sub layer (actual figures depend on your provider and network distance).
 
 **Yellowstone gRPC** is one of the most widely used implementations of the Geyser plugin interface. It streams account updates, transactions, entries, block notifications, and slot notifications.
 
 To use Yellowstone, you need a gRPC endpoint from an RPC provider such as Triton, Helius, QuickNode, or Alchemy. You create a subscription client, define filters (for example, filtering transactions that include the Token Program), and process updates as they arrive.
 
 Yellowstone returns raw Protocol Buffer data, not JSON. You need to decode binary instruction data using program IDLs or parsing libraries - which is where indexing frameworks come in.
+
+### Protocol changes indexers must handle (2026)
+
+**Agave 4.3 Geyser changes.** With Alpenglow, vote transactions no longer exist, so Geyser streams no longer carry them. Agave 4.3 also adds new `*_for_bank` Geyser callbacks and deprecates the old ones - if you run your own Geyser plugin (rather than consuming a provider's Yellowstone endpoint), plan the migration. Source: [Helius - Agave v4.3](https://www.helius.dev/blog/agave-v4-3)
+
+**v1 transactions.** Since Sep 15 2026 (epoch 1035, SIMD-0296 + SIMD-0385) the network accepts a third transaction format alongside legacy and v0. Parsers and indexers must handle it:
+
+- The message starts with version byte `0x81` (legacy has no version byte; v0 uses `0x80`)
+- Up to 4,096 bytes (legacy/v0: 1,232 bytes)
+- Accounts are carried inline - **no Address Lookup Tables**, so there are no `loadedAddresses` to resolve
+- Compute budget (CU limit, priority fee, loaded-accounts-data limit, heap) lives in **header fields**, not ComputeBudget program instructions - fee and CU analytics that look for ComputeBudget instructions will miss v1 transactions
+
+Source: [Larger transaction sizes](https://solana.com/upgrades/larger-transaction-sizes). Check that your decoder library (and your framework version of Carbon or Vixen) supports v1 before relying on it.
 
 ## 7. Indexing Frameworks
 
@@ -165,7 +183,7 @@ LaserStream is purpose-built for reliable, ultra-low-latency, fault-tolerant dat
 
 **Node failover.** Your connection aggregates data from multiple nodes simultaneously for maximum uptime.
 
-Best practices for LaserStream subscriptions: narrow your filter to only the data you need, use the `confirmed` commitment level (balances latency and finality), set `failed: false` unless you need failed transactions, and exclude vote transactions.
+Best practices for LaserStream subscriptions: narrow your filter to only the data you need, use the `confirmed` commitment level (under Alpenglow, `confirmed` and `finalized` effectively converge on the finalization certificate, ~150ms target, so there is little latency to gain by going lower than `confirmed`), and set `failed: false` unless you need failed transactions. There is no need to exclude vote transactions on live streams anymore - since Alpenglow (Oct 21 2026) blocks contain none.
 
 ### Enhanced WebSockets
 
@@ -177,7 +195,7 @@ Use Enhanced WebSockets for prototyping, non-mission-critical streaming, or when
 
 A production-grade Solana indexer combines all of these components into a coherent system.
 
-**Backfill layer.** Uses getTransactionsForAddress (or getBlock for high-frequency programs) to populate the database with historical data. Runs as a one-time or periodic batch job.
+**Backfill layer.** Uses getSignaturesForAddress + getTransaction, a provider-specific method such as getTransactionsForAddress, or getBlock for high-frequency programs, to populate the database with historical data. Runs as a one-time or periodic batch job.
 
 **Streaming layer.** LaserStream or Yellowstone gRPC subscription pushes new transactions in real time. Filters are set as narrow as possible to minimize processing overhead.
 
@@ -209,3 +227,5 @@ The result: an application that can answer complex queries about on-chain data i
 - [Triton Streaming Documentation](https://docs.triton.one/chains/solana/streaming)
 - [LaserStream Quickstart](https://www.helius.dev/docs/laserstream)
 - [Solana RPC Providers](https://solana.com/rpc)
+- [Helius - Agave v4.3 (Alpenglow, Geyser changes)](https://www.helius.dev/blog/agave-v4-3)
+- [Solana Upgrades - Larger Transaction Sizes (v1)](https://solana.com/upgrades/larger-transaction-sizes)

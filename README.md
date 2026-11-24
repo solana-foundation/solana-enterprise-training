@@ -19,7 +19,7 @@ This training program is structured into several modules that progressively buil
 | 6 | [DeFi on Solana](module-6-defi-on-solana/) | DeFi primitives, major protocols, and enterprise applications |
 | 7 | [Payments](module-7-payments/) | Enterprise payment infrastructure, batch transfers, and cross-border settlement |
 | 7B | [Subscriptions](module-7b-subscriptions/) | Pull payments on a push-only chain: the Subscriptions Delegation Program, fixed and recurring delegations, subscription plans, and running a collector |
-| 8 | [Privacy on Solana](module-8-privacy-on-solana/) | Confidential Transfers, Contra payment channels, and Solana Permissioned Environments |
+| 8 | [Privacy on Solana](module-8-privacy-on-solana/) | Confidential Transfers, Private Channels, and the wider privacy ecosystem (Arcium, Helius ZK Compression / Privacy Rings) |
 | 9 | [Indexing on Solana](module-9-indexing-on-solana/) | Geyser, Yellowstone gRPC, indexing frameworks, storage strategies, and real-time streaming |
 | 10 | [Agentic Payments](module-10-agentic-payments/) | Machine-to-machine micropayments with the x402 protocol, facilitators, and the agent commerce ecosystem |
 | 11 | [Security on Solana](module-11-security-on-solana/) | The runtime security model, the program vulnerability checklist, Anchor's guarantees and limits, real exploit case studies, and the audit lifecycle |
@@ -27,6 +27,8 @@ This training program is structured into several modules that progressively buil
 ## Prerequisites
 
 Understanding of general programming concepts and basic familiarity with blockchain technology. Prior experience with Rust or Solana is not required.
+
+To run the TypeScript examples you need Node.js 20 or later (Node 18 is end-of-life).
 
 ## Course Documents
 

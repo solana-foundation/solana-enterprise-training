@@ -11,7 +11,7 @@
 ## Topics Covered
 
 - Token Extensions Program architecture
-- Mint extensions: confidential balances, transfer fees, closing mint, interest-bearing tokens, non-transferable tokens, permanent delegate, transfer hook, metadata pointer, metadata, pausable, scaled UI amount
+- Mint extensions: confidential balances, transfer fees, closing mint, interest-bearing tokens, non-transferable tokens, permanent delegate, transfer hook, metadata pointer, metadata, pausable, scaled UI amount, permissioned burn
 - Account extensions: memo required on transfer, immutable ownership, default account state, CPI guard
 - Token ACL (Access Control List)
 - Token ACL architecture and freeze/thaw workflows
@@ -51,6 +51,9 @@ The Token Extensions Program is a **superset** of the original Token Program - i
 
 ### Confidential Balances
 
+> [!NOTE]
+> **Status: live on mainnet.** The ZK ElGamal Proof program that confidential transfers depend on was disabled on June 19, 2025 after a Fiat-Shamir bug was found, and was **re-enabled on mainnet in June 2026** (Agave 4.0) after an audit. Confidential transfers are available again. See the [post-mortem](https://solana.com/news/post-mortem-june-25-2025) and [return announcement](https://solanacompass.com/news/confidential-transfers-return-to-solana-mainnet-after-year-long-security-pause).
+
 **Confidential Balances** is a suite of Token-2022 extensions that hide token **amounts** on-chain while keeping account addresses publicly visible - partial privacy that conceals values, not participants. The suite spans confidential **transfers** (encrypted transfer amounts), confidential **mint and burn** (issuance and redemption without revealing quantities), and confidential **transfer fees** (fees that stay encrypted alongside the amounts they apply to). All three share the same cryptographic machinery, so once the transfer flow is understood the others follow.
 
 The core operation, a **confidential transfer**, hides the amount moved between two accounts while sender and receiver remain visible:
@@ -60,7 +63,7 @@ The core operation, a **confidential transfer**, hides the amount moved between 
 - An optional **auditor key**, designated by the issuer on the mint, can decrypt all amounts - enabling selective disclosure for regulatory compliance without making balances public
 - The SPL Token-2022 SDK contains helper functions for sending confidential transfers
 
-This is what the Mosaic stablecoin example in this module enables: holders get balance and amount privacy while the issuer retains audit capability. Module 8 (Privacy) covers the cryptography, the full instruction lifecycle, and the current Mainnet status of the standard in depth.
+This is what the Mosaic stablecoin example in this module enables: holders get balance and amount privacy while the issuer retains audit capability. Module 8 (Privacy) covers the cryptography, the full instruction lifecycle, and the history of the 2025 pause and 2026 re-enablement in depth.
 
 ### Transfer Fees
 
@@ -99,7 +102,7 @@ The permanent delegate extension allows a mint creator to specify a permanent de
 
 Transfer hooks give token creators additional control over how their token is transferred. The creator develops a program that implements the transfer hook interface and configures the token mint to use that program. The Token Extensions Program calls the hook program **after** the transfer logic executes - balances are already updated when the hook runs, so the hook observes the real post-transfer state and cannot be tricked by a half-applied transfer. If the hook errors, the whole transaction (including the transfer) is rolled back.
 
-**Primary use case:** Royalty enforcement on token transfers. This module's `anchor-transfer-hook` example uses a hook for per-holder rate limiting instead.
+**Use cases:** compliance checks on every transfer (allowlists, jurisdiction rules), rate limits and transfer caps, and royalty enforcement. This module's `anchor-transfer-hook` example uses a hook for per-holder rate limiting.
 
 ### Metadata Pointer and Metadata
 
@@ -117,7 +120,13 @@ The pausable extension lets a designated **pause authority** halt all activity o
 
 The scaled UI amount extension applies an issuer-controlled **multiplier** to the amount displayed by wallets and explorers, without changing raw on-chain balances. Where interest-bearing tokens derive the display amount from a continuously compounding rate, scaled UI amount sets the factor directly.
 
-**Use cases:** share splits and rebasing-style instruments (e.g. a tokenized fund that distributes by adjusting the scale factor rather than minting). Like interest-bearing tokens, this is display-level only - programs always see raw amounts.
+**Use cases:** stock splits, dividends, and rebasing-style instruments (e.g. a tokenized fund that distributes by adjusting the scale factor rather than minting). Like interest-bearing tokens, this is display-level only - programs always see raw amounts.
+
+### Permissioned Burn
+
+The permissioned burn extension designates a **burn authority** on the mint. Once set, the standard `Burn`/`BurnChecked` instructions fail - for holders and even for the permanent delegate - and every burn must be co-signed by that authority through the permissioned burn instruction.
+
+**Use cases:** keeping supply in sync with off-chain books, such as a tokenized fund where redemptions must go through the issuer's program. Module 5's `anchor-mmf` example sets its Config PDA as the burn authority so burns only happen inside gated, role-checked paths.
 
 ## 4. Account Extensions
 

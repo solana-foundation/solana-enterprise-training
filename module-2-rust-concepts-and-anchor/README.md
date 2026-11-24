@@ -104,7 +104,7 @@ Anchor is a Rust framework for Solana programs that handles account validation, 
 
 **What Anchor Provides:**
 - **IDL Specification** - Interface Definition Language for program interfaces
-- **TypeScript package** - Automatically generates clients from the IDL
+- **TypeScript package** - Automatically generates clients from the IDL (Anchor 1.x: `@anchor-lang/core`, formerly `@coral-xyz/anchor`)
 - **CLI and workspace management** - Commands for building, testing, and deploying programs
 - **AVM (Anchor Version Manager)** - Manage multiple Anchor versions across projects
 
@@ -133,13 +133,24 @@ Anchor removes Solana's most error-prone low-level boilerplate:
 ```
 anchor init <name>          Scaffold a new workspace + program
 anchor build                Compile programs to SBPF
-anchor test                 Run tests against a local validator
+anchor test                 Build, deploy to a local network, and run tests
+anchor localnet             Start a local network with your programs deployed
 anchor deploy               Deploy to the configured cluster
-anchor idl init             Upload IDL to on-chain account
+anchor idl <subcommand>     Manage the on-chain IDL account (fetch, upgrade, ...)
 avm use <version>           Switch Anchor versions per project
 ```
 
 Run `anchor --help` for the full list. AVM (Anchor Version Manager) lets you switch between Anchor versions easily per project.
+
+> [!NOTE]
+> **Anchor 1.x (1.0 stable April 2026; this course's examples use 1.1.2).** A few things differ from older tutorials:
+> - The TypeScript package is **`@anchor-lang/core`** (not `@coral-xyz/anchor`).
+> - `anchor test` and `anchor localnet` run against **Surfpool** (a local RPC node that can fork mainnet state) by default instead of `solana-test-validator`.
+> - New projects use a **LiteSVM** (in-process runtime) test template.
+> - The IDL is uploaded as part of deployment; the `anchor idl` subcommands remain for fetching and managing the on-chain IDL account. Check `anchor idl --help` for your version.
+> - Once SIMD-0500 activates (expected with Agave 4.4; **pending**), new deployments and upgrades must target sBPFv3, which requires **Anchor ≥ 1.2.0**. Existing deployed programs keep running.
+>
+> See the [Anchor documentation](https://www.anchor-lang.com/docs).
 
 ---
 
@@ -299,8 +310,8 @@ For PDA-signed CPIs (e.g., withdrawing from a vault PDA), use `CpiContext::new_w
 **Key rules:**
 - The calling program must pass all accounts the target program needs
 - PDA signing via `invoke_signed` only works if the PDA was derived from the calling program's ID
-- CPI depth is limited
-- Indirect re-entrancy is blocked — Program A cannot be called back by a program it invoked
+- CPI depth is limited to 4 levels of nested invocation
+- Indirect re-entrancy is blocked — Program A cannot be called back by a program it invoked (A→B→A fails); direct self-recursion is allowed
 
 ---
 
@@ -332,8 +343,7 @@ See the [challenge/](challenge/) folder for this module's challenge.
 
 ## Additional Resources
 
-- [Anchor Documentation](https://www.anchor-lang.com/)
-- [Anchor Book](https://book.anchor-lang.com/)
+- [Anchor Documentation](https://www.anchor-lang.com/docs)
 - [The Rust Programming Language (Book)](https://doc.rust-lang.org/book/)
 - [Rustlings](https://github.com/rust-lang/rustlings)
 - [Solana Playground](https://beta.solpg.io/)

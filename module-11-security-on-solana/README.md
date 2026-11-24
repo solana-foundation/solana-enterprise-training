@@ -7,7 +7,7 @@
 - Apply the Solana program security checklist: ownership, signers, account substitution, type confusion, arithmetic, CPI safety, account closing, and PDA canonicalization
 - Explain which vulnerability classes Anchor eliminates by construction, and which ones survive Anchor
 - Identify token-layer risks: authority configuration, delegates, and Token-2022 extension interactions
-- Draw lessons from real Solana exploits (Wormhole, Cashio, Mango Markets, Slope) and map each to a checklist item
+- Draw lessons from real Solana exploits (Wormhole, Cashio, Mango Markets, Slope, Drift) and map each to a checklist item or operational control
 - Design an operational security posture: upgrade authority lifecycle, key management, monitoring, and incident response levers
 - Run a security development lifecycle: threat modeling, testing layers, external audits, bug bounties, and post-launch monitoring
 
@@ -46,7 +46,7 @@ Security analysis starts with knowing which properties are enforced by the platf
 
 - **Ownership.** Only the program that owns an account may modify its data or deduct its lamports. A program cannot write to another program's accounts, full stop.
 - **Signature verification.** Every account flagged as a signer in a transaction has a verified Ed25519 signature. A program can trust `is_signer` — the runtime already checked it.
-- **Write-locks and no reentrancy.** One write-lock per writable account per transaction; a program cannot appear twice in a call stack. The reentrancy guard pattern from Solidity has no purpose here (Module 1B, Section 5).
+- **Write-locks and no reentrancy.** One write-lock per writable account per transaction. Indirect re-entrancy is rejected by the runtime: if A calls B, B cannot call back into A (A→B→A fails). Direct self-recursion (A calling A) is allowed, and CPI nesting is capped at 4 levels (call stack height 5). The reentrancy guard pattern from Solidity has no purpose here (Module 1B, Section 5).
 - **Balance conservation.** Lamports are conserved across an instruction; the runtime rejects instructions that mint lamports out of nothing.
 - **Duplicate signature rejection.** A signed transaction can land at most once. Replay of an identical transaction is impossible at the chain level.
 
@@ -241,6 +241,13 @@ Each maps cleanly onto the checklist — the point of this section is that none 
 
 **Slope wallet (August 2022, ~$4-8M across ~9k wallets).** Not a program bug: the mobile wallet transmitted seed phrases to a centralized logging service in plaintext; whoever accessed those logs drained the keys. **Class: operational/key security (Section 7).** Lesson: the strongest on-chain program is irrelevant if key material leaks off-chain — vendor and telemetry review are part of the security perimeter.
 
+**Drift (April 1, 2026, ~$280-285M).** Not a smart contract bug. Attackers (attributed to DPRK) spent months social-engineering signers of Drift's admin multisig and got them to sign transactions built on **durable nonces** instead of recent blockhashes. A normal transaction expires after ~150 slots (roughly 30 seconds); a durable-nonce transaction stays valid **indefinitely, until its nonce account is advanced**. The attackers collected the pre-signed admin transactions, held them, and later submitted them to take over admin control of the protocol and drain it. Every signature was genuine; the multisig worked exactly as designed. Sources: [The Block](https://www.theblock.co/post/396107), [TRM Labs](https://trmlabs.com/resources/blog/north-korean-hackers-attack-drift-protocol-in-285-million-heist). **Class: operational/key security - signer and governance process (Section 7).** Lessons:
+- **Review what you sign.** Signers must decode and understand every instruction, and treat a durable-nonce transaction (first instruction is `AdvanceNonceAccount`) as a standing authorization, not a one-off approval.
+- **Timelock admin actions** so that a privileged change - authority transfer, config change, upgrade - becomes visible on-chain and can be cancelled before it executes.
+- **Multisig hygiene:** a high threshold of independent signers, dedicated signing devices, out-of-band verification of every request, and rotation of signers who may be compromised.
+- **Monitor nonce accounts tied to admin keys:** alert when a nonce account whose authority is an admin signer or multisig member is created or used.
+- **Use Squads policies** (thresholds, time locks, spending limits, role separation) rather than a bare M-of-N for privileged actions.
+
 ## 7. Operational security: authorities, keys, and monitoring
 
 Program code is one third of the posture. The other two thirds are who can change it and how you detect trouble.
@@ -253,7 +260,7 @@ deployer keypair  →  multisig (Squads)  →  frozen (authority = None)
 ```
 
 - Move to a multisig **before** mainnet value arrives; a single deployer keypair on a laptop is the most common institutional finding.
-- Use threshold + timelock policies in the multisig for upgrades; announce upgrade windows.
+- Use threshold + timelock policies in the multisig for upgrades and every other admin action; announce upgrade windows. A timelock is what turns a stolen or socially engineered approval into a cancellable event (the Drift lesson).
 - Freezing is the endgame for mature, stable programs — irreversible, so most enterprises hold at multisig with governance.
 - The same lifecycle applies to every privileged authority: mint/freeze authorities, config admins, fee collectors. Inventory them; each is an attack target.
 
@@ -262,10 +269,11 @@ deployer keypair  →  multisig (Squads)  →  frozen (authority = None)
 - Hot keys (payment servers, crank bots) hold working balances only; treasury sits behind multisig/custody with sweep flows in between.
 - Separate keys per environment; no production key ever appears in code, CI logs, or telemetry (the Slope lesson).
 - Prefer role PDAs + on-chain RBAC (the Module 5 anchor-mmf `Role` pattern) over shared admin keys — revocation becomes an on-chain operation instead of a key rotation.
+- **Signer discipline for multisig members.** Social engineering of signers can defeat a multisig without stealing a single key (Drift, Section 6). Signers verify every request out of band, decode the transaction before signing (simulate it, read every instruction), and refuse durable-nonce transactions for admin actions unless there is an explicit, documented reason — a durable-nonce signature stays valid until the nonce advances, so it can be held and replayed by whoever collects it.
 
 **Monitoring and incident response.**
 
-- Stream your program's transactions (Geyser/Yellowstone, Module 9) and alert on: privileged instructions, authority changes, anomalous volumes, and failed-transaction spikes (probing looks like failures).
+- Stream your program's transactions (Geyser/Yellowstone, Module 9) and alert on: privileged instructions, authority changes, anomalous volumes, failed-transaction spikes (probing looks like failures), and the creation or use of durable nonce accounts whose authority is one of your admin signers.
 - Decide *before* launch what your emergency levers are: pause flags gating sensitive instructions (Module 5's `set_paused`), freeze authority for token-level response, and an upgrade path for code fixes.
 - Rehearse the runbook: who signs the multisig at 3 a.m., in what order, with what communication plan. Audit findings are measured in hours-to-mitigate as much as in bugs found.
 
@@ -282,7 +290,7 @@ A program can be memory-safe, checklist-clean, and still lose everything to econ
 **Before the audit:**
 
 1. **Threat model early.** For each instruction: who may call it, what accounts does it trust, what is the worst state it can write? The Section 3 checklist is the template.
-2. **Test in layers** (Module 2 tooling): unit tests on pure logic; LiteSVM/Mollusk tests that *attempt each checklist attack* — wrong signer, substituted account, duplicate accounts, non-canonical bump; a small end-to-end `anchor test` suite.
+2. **Test in layers** (Module 2 tooling): unit tests on pure logic; LiteSVM (in-process) and Mollusk (instruction-level) tests that *attempt each checklist attack* — wrong signer, substituted account, duplicate accounts, non-canonical bump; a small end-to-end `anchor test` suite, which in Anchor 1.x runs against Surfpool (a local RPC that can fork mainnet state, useful for testing integrations against real accounts).
 3. **Fuzz the deserialization and arithmetic boundaries** (Trident is the Anchor-aware fuzzing framework).
 4. **Static review:** every `UncheckedAccount`'s `/// CHECK:` comment, every `unwrap`, every `as` cast, `overflow-checks = true` present.
 
@@ -306,7 +314,9 @@ An audit exercise: find the planted vulnerabilities in a deliberately broken Anc
 - [Neodyme — Common Pitfalls in Solana Development](https://workshop.neodyme.io/) — The canonical hands-on security workshop.
 - [Sec3 — How to Audit Solana Smart Contracts](https://www.sec3.dev/blog/how-to-audit-solana-smart-contracts) — Audit-grade checklist reference.
 - [Coral — Sealevel Attacks](https://github.com/coral-xyz/sealevel-attacks) — Minimal reproductions of each vulnerability class, with insecure/secure pairs.
-- [Anchor Book — Security](https://book.anchor-lang.com/) — Constraint reference and security guidance.
+- [Anchor Documentation](https://www.anchor-lang.com/docs) — Constraint reference and security guidance (the old Anchor Book is outdated).
 - [Trident](https://ackee.xyz/trident) — Fuzzing framework for Anchor programs.
+- [LiteSVM](https://github.com/LiteSVM/litesvm), [Mollusk](https://github.com/anza-xyz/mollusk), [Surfpool](https://github.com/txtx/surfpool) — Testing tools for adversarial tests: in-process SVM, instruction-level harness, and local RPC with mainnet fork.
+- [Squads](https://squads.so/) — Multisig and policy controls for program upgrade and admin authorities.
 - [Helius — A Hitchhiker's Guide to Solana Program Security](https://www.helius.dev/blog/a-hitchhikers-guide-to-solana-program-security) — Readable overview of the vulnerability classes.
 - [Solana Program Security Course (solana.com)](https://solana.com/developers/courses/program-security) — Official course covering the same checklist with exercises.

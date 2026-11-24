@@ -16,7 +16,7 @@
 
 - Why agentic payments: the autonomy gap
 - The friction problem: accounts, API keys, and broken flow
-- Why Solana: sub-cent fees and sub-second finality
+- Why Solana: sub-cent fees, 200ms slots, and ~150ms finality
 - The x402 protocol
 - The x402 flow, step by step
 - Facilitators: what they abstract and what they cost
@@ -51,7 +51,7 @@ To operate fully independently, agents need a way to make micropayments for serv
 - **Account-based billing** (subscriptions, API keys, invoicing) requires human onboarding: forms, KYC, dashboards, key management.
 - **Settlement latency** of days means providers must extend credit to unknown counterparties — a non-starter for anonymous agents.
 
-Solana's sub-cent fees and sub-second finality make machine-to-machine micropayments technically and economically viable for the first time.
+Solana's sub-cent fees, 200ms slots, and ~150ms finality target (Alpenglow) make machine-to-machine micropayments technically and economically viable for the first time.
 
 ## 2. The friction problem
 
@@ -82,8 +82,8 @@ The economics of micropayments only work if the payment rail costs less than the
 
 | Requirement | Solana property |
 |-------------|-----------------|
-| Fees far below the payment amount | Base fee ~ $0.0003; total cost fractions of a cent |
-| Settlement fast enough for a request/response cycle | Sub-second confirmation; ~400 ms slots |
+| Fees far below the payment amount | Base fee 5,000 lamports per signature (dollar value depends on the SOL price); total cost typically a fraction of a cent |
+| Settlement fast enough for a request/response cycle | 200ms slots; ~150ms finality target under Alpenglow |
 | No counterparty credit risk | Payment settles on-chain before content is served |
 | Stablecoin denomination | USDC and other SPL tokens are first-class |
 | Programmatic verification | Any server can verify a transfer with one RPC call |
@@ -96,11 +96,15 @@ Agentic payments need a way for clients and servers to negotiate payment terms o
 
 x402 uses HTTP's **402 "Payment Required"** status code — reserved in the HTTP specification since HTTP/1.1, but never practical until blockchain settlement made machine-payable requests viable.
 
+**Versions.** x402 **v2** was released on Dec 11 2025 and is the version this module teaches. v2 renamed the HTTP headers, moved network identifiers to CAIP-2 strings (e.g. `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp` for mainnet, `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1` for devnet instead of v1's `solana` / `solana-devnet`), and reorganized the SDKs into scoped `@x402/*` packages. You will still meet v1 (`X-PAYMENT` / `X-PAYMENT-RESPONSE` headers, `x402Version: 1`) in older code and tutorials, including this module's minimal lab example — it is labeled "x402 v1 (legacy)" wherever it appears. Source: [x402 v2 spec](https://github.com/coinbase/x402/tree/main/specs).
+
+**Adoption.** Solana carried roughly 70% of monthly x402 volume as of Aug 2026, with 35M+ cumulative x402 transactions on Solana; see [x402scan](https://x402scan.com/) for current figures.
+
 **Core protocol idea:** use plain HTTP.
 
 1. A client hits a URL
-2. The server replies `402 Payment Required` with a JSON **PaymentRequirements** object
-3. The client pays and retries with an `X-PAYMENT` header
+2. The server replies `402 Payment Required` with the payment terms (a base64-encoded **PaymentRequired** object listing the accepted **PaymentRequirements**) in the `PAYMENT-REQUIRED` header
+3. The client pays and retries with a `PAYMENT-SIGNATURE` header
 4. The server verifies and settles the payment
 5. The server responds `200 OK` with the content
 
@@ -109,7 +113,7 @@ x402 uses HTTP's **402 "Payment Required"** status code — reserved in the HTTP
 - **Stateless.** No sessions, no accounts, no API keys, no OAuth.
 - **Standard HTTP.** Works with any HTTP client, proxy, or middleware stack.
 - **Chain-agnostic by design;** on Solana it supports any SPL token the server accepts.
-- **Spec building blocks:** the `PaymentRequirements` structure, the base64-encoded `X-PAYMENT` header, the optional `X-PAYMENT-RESPONSE` header on success, and an optional facilitator API (`/verify`, `/settle`, `/supported`). The current concrete payment scheme is `exact` (pay a specific amount); others such as `upto` are proposed.
+- **Spec building blocks (v2):** the `PaymentRequirements` structure, the base64-encoded `PAYMENT-REQUIRED` (server → client), `PAYMENT-SIGNATURE` (client → server), and `PAYMENT-RESPONSE` (server → client, settlement result) headers, and an optional facilitator API (`/verify`, `/settle`, `/supported`). The current concrete payment scheme is `exact` (pay a specific amount); others such as `upto` are proposed.
 
 ## 5. The x402 flow, step by step
 
@@ -118,18 +122,18 @@ Client                        Server                     Facilitator / Chain
   |                             |                              |
   |  GET /costly-data           |                              |
   |---------------------------->|                              |
-  |  402 + PaymentRequirements  |                              |
+  |  402 + PAYMENT-REQUIRED     |                              |
   |<----------------------------|                              |
   |                             |                              |
   |  [construct + sign payment] |                              |
   |                             |                              |
   |  GET /costly-data           |                              |
-  |  X-PAYMENT: <base64 proof>  |                              |
+  |  PAYMENT-SIGNATURE: <b64>   |                              |
   |---------------------------->|  verify + settle             |
   |                             |----------------------------->|
   |                             |  settlement confirmed        |
   |                             |<-----------------------------|
-  |  200 OK + content           |                              |
+  |  200 OK + PAYMENT-RESPONSE  |                              |
   |<----------------------------|                              |
 ```
 
@@ -157,9 +161,15 @@ The facilitator is completely optional — a server can implement its own verifi
 
 ## 7. Server-side implementation
 
-With the x402 middleware for Express, protecting an endpoint is declarative — pricing, network, and recipient are configured per route:
+With the x402 v2 middleware for Express (`@x402/express`), protecting an endpoint is declarative — pricing, network, and recipient are configured per route:
 
 ```typescript
+import { paymentMiddleware, x402ResourceServer } from "@x402/express";
+import { HTTPFacilitatorClient } from "@x402/core/server";
+import { ExactSvmScheme } from "@x402/svm/exact/server";
+
+const facilitatorClient = new HTTPFacilitatorClient({ url: facilitatorUrl });
+
 app.use(
   paymentMiddleware(
     {
@@ -190,9 +200,12 @@ app.get("/costly-data", (req, res) => {
 
 The middleware automatically handles the 402 response with payment requirements, payment verification, transaction submission via the facilitator, and settlement confirmation. The business logic in the route handler stays completely payment-unaware.
 
-Coinbase's reference implementation follows the same pattern with per-route pricing:
+This is Coinbase's v2 reference implementation (`@x402/*` packages). The network is a CAIP-2 identifier: `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1` is devnet; use `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp` for mainnet.
+
+For comparison, **x402 v1 (legacy)** code — which you will still find in older tutorials — used the `x402-express` package with a recipient argument and v1 network names:
 
 ```typescript
+// x402 v1 (legacy) - do not use for new integrations
 app.use(
   paymentMiddleware(RECIPIENT, {
     "GET /premium": { price: "$0.0001", network: "solana-devnet" },
@@ -229,18 +242,25 @@ const response = await fetchWithPayer("https://helius.api.corbits.dev", {
 });
 ```
 
-The payment proof itself is a base64-encoded JSON object in the `X-PAYMENT` header:
+The Faremeter (Corbits) client above is one option; Coinbase's v2 SDK offers the same pattern via `wrapFetchWithPayment` from `@x402/fetch` with an `x402Client` (`@x402/core`) and the `ExactSvmScheme` client from `@x402/svm/exact/client`.
+
+The payment proof itself is a base64-encoded JSON **PaymentPayload** in the `PAYMENT-SIGNATURE` header. In v2 it echoes back which of the server's offered requirements the client accepted:
 
 ```typescript
-const paymentProof = {
-  x402Version: 1,
-  scheme: "exact",
-  network: "solana-mainnet",
+const paymentPayload = {
+  x402Version: 2,
+  accepted: {                       // the PaymentRequirements entry being paid
+    scheme: "exact",
+    network: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",  // CAIP-2: Solana mainnet
+    // ...amount, asset, payTo as quoted by the server
+  },
   payload: {
-    serializedTransaction: serializedTx   // signed, not yet submitted
+    transaction: serializedTx       // base64, signed, not yet submitted
   }
 };
 ```
+
+(In **x402 v1 (legacy)** the same object was sent in an `X-PAYMENT` header with `x402Version: 1` and flat `scheme` / `network: "solana"` fields.)
 
 Note the design: the client **signs but does not submit** the transaction. The server (or its facilitator) broadcasts it. This gives the server control over when settlement happens relative to serving the content.
 
@@ -248,7 +268,7 @@ Note the design: the client **signs but does not submit** the transaction. The s
 
 A server that verifies payments itself (no facilitator) must treat the client-provided transaction as **untrusted input**. The reference verification flow:
 
-1. **Decode and introspect the transaction.** Parse the `X-PAYMENT` header, deserialize the transaction, and find the SPL token transfer instruction. Verify the destination is your token account and the amount meets the price. Do not trust any field the client claims — decode the actual instruction bytes.
+1. **Decode and introspect the transaction.** Parse the `PAYMENT-SIGNATURE` header (`X-PAYMENT` in v1), deserialize the transaction, and find the SPL token transfer instruction. Verify the destination is your token account and the amount meets the price. Do not trust any field the client claims — decode the actual instruction bytes.
 
 2. **Simulate before submitting.** Run `simulateTransaction` first. A transaction that fails simulation should be rejected with a 402, not submitted.
 
@@ -261,7 +281,7 @@ A server that verifies payments itself (no facilitator) must treat the client-pr
 - Consider returning a short-lived JWT after payment so clients can reuse access briefly without paying per request
 - Keep server keys in environment variables, never in code
 - A Solana-specific variant exists where the client submits the transaction itself (with a memo) and sends only the signature for verification — this survives connection loss between payment and content delivery, but deviates from the x402 standard flow
-- Choose commitment levels using the Module 7 framework: `confirmed` for serving content, `finalized` for anything triggering irreversible off-chain actions
+- Choose commitment levels using the Module 7 framework: `confirmed` for serving content, `finalized` for anything triggering irreversible off-chain actions (under Alpenglow the two effectively converge, ~150ms target, so the cost of waiting for `finalized` is small)
 
 ## 10. pay.sh: payments for HTTP agents and CLI tools
 
@@ -284,7 +304,7 @@ This is the developer-experience layer of agentic payments: any existing CLI too
 
 x402 is not the only live payment standard on Solana. **MPP (Machine Payments Protocol)** is the second protocol the `pay` CLI supports, and the two coexist deliberately:
 
-- **x402** expresses the challenge through the `402 Payment Required` status code and the `X-PAYMENT` header.
+- **x402** expresses the challenge through the `402 Payment Required` status code and its own headers (`PAYMENT-REQUIRED` / `PAYMENT-SIGNATURE` in v2; `X-PAYMENT` in v1).
 - **MPP** expresses the challenge through the standard **`WWW-Authenticate`** header and retries with an **authorization credential** — the same negotiation shape HTTP already uses for authentication, applied to payment. The specification lives at [paymentauth.org](https://paymentauth.org/draft-solana-charge-00.html) as `draft-solana-charge`.
 
 In practice, a client like `pay` does not care which protocol a server speaks: it detects the challenge type, prepares the stablecoin transaction, requests local wallet approval, and retries with the right proof format. You can exercise an MPP challenge against the public debugger:
@@ -301,7 +321,7 @@ The takeaway for architects: the challenge-negotiation layer is still standardiz
 
 ### Payment channels: one settlement for many payments
 
-Per-request on-chain settlement has a floor: every request costs one transaction fee and one confirmation round-trip. For **metered, streamed, or very-high-frequency** payments — per-token LLM billing, per-second streaming, thousands of calls in a session — even sub-cent fees and sub-second finality become the bottleneck.
+Per-request on-chain settlement has a floor: every request costs one transaction fee and one confirmation round-trip. For **metered, streamed, or very-high-frequency** payments — per-token LLM billing, per-second streaming, thousands of calls in a session — even sub-cent fees and ~150ms finality become the bottleneck.
 
 The Solana Foundation's [payment-channels](https://github.com/solana-foundation/payment-channels) program is the primitive that removes that floor: **unidirectional payment channels** where one `open` and one `settle` replace a transaction per payment. It is a small Pinocchio program over SPL Token / Token-2022, live on mainnet ([`CHNLxYvVA28MJP9PrFuDXccuoGXAx7jBacfLEkahyGsX`](https://explorer.solana.com/address/CHNLxYvVA28MJP9PrFuDXccuoGXAx7jBacfLEkahyGsX)).
 
@@ -333,7 +353,7 @@ The space is evolving quickly; this table reflects the current landscape:
 | [Corbits](https://corbits.dev/) | Yes | Solana-first x402 implementation; pay-per-RPC example |
 | [MCPay.tech](https://mcpay.tech/) | Yes | Pay-per-request for MCP servers — monetize agent tools |
 | [PayAI](https://payai.network/) | Yes | x402 facilitator with Solana support; currently sponsors transaction fees |
-| [Coinbase x402](https://github.com/coinbase/x402) | Yes | Reference implementation; TypeScript client + server, 6 SVM test scenarios |
+| [Coinbase x402](https://github.com/coinbase/x402) | Yes | Reference implementation and spec; v2 TypeScript SDK as `@x402/*` packages (`@x402/express`, `@x402/fetch`, `@x402/svm`) |
 | [ACK](https://github.com/agentcommercekit/ack) | In progress | Agent Commerce Kit — adds verifiable agent identity (W3C DIDs/VCs) and compliance-ready payment receipts |
 | [x402scan](https://x402scan.com/) | Explorer | Ecosystem analytics: volumes, merchants, endpoints |
 
@@ -366,9 +386,11 @@ The common thread: **pricing granularity that subscriptions cannot express**. A 
 
 Build a minimal x402 flow on devnet, without a facilitator, to internalize the protocol mechanics.
 
+Note: the native example repo and the lab solution implement the **x402 v1 (legacy)** wire format (`X-PAYMENT` header, `x402Version: 1`, `solana-devnet` network name). The verification mechanics are identical in v2; as a stretch goal, port the header names and payload shape to v2 (Sections 4 and 8).
+
 - **Starting point:** the [native example repo](https://github.com/Woody4618/x402-solana-examples) — a minimal Express server and Node client with no x402 SDK dependencies
 - **Flow:**
-  1. Run the server and client as-is; trace the full flow (quote → sign → X-PAYMENT → verify → settle → content) in the logs
+  1. Run the server and client as-is; trace the full flow (quote → sign → X-PAYMENT (v1 header) → verify → settle → content) in the logs
   2. Modify the server to require a different SPL token and price
   3. Add the JWT improvement: after a verified payment, return a token granting 5 minutes of access without further payments
 - **Checkpoints:**
@@ -389,6 +411,7 @@ Note: the example code is unaudited demonstration code — the lab is about prot
 - [Introduction to x402](https://solana.com/developers/guides/getstarted/intro-to-x402) — Protocol fundamentals, SDK landscape, and the native example walkthrough.
 - [Build with Kora](https://solana.com/developers/guides/getstarted/build-a-x402-facilitator) — Implement gasless x402 payments using Kora's signing infrastructure.
 - [x402.org](https://www.x402.org/) — The protocol specification.
+- [x402 v2 specification](https://github.com/coinbase/x402/tree/main/specs) — Core spec and transport specs (HTTP headers `PAYMENT-REQUIRED` / `PAYMENT-SIGNATURE` / `PAYMENT-RESPONSE`).
 - [x402 GitHub (Coinbase)](https://github.com/coinbase/x402) — Reference implementation.
 - [x402scan](https://x402scan.com/) — Ecosystem explorer and analytics.
 - [pay.sh docs](https://pay.sh/docs) — CLI payment layer installation and usage.

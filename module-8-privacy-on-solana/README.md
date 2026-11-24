@@ -12,7 +12,7 @@ By the end of this module, participants will be able to:
 - Describe how the auditor key pattern enables selective disclosure for regulatory compliance without sacrificing privacy
 - Explain the Private Channels architecture - escrow-based deposits, private sequencing, and 100ms settlement batches
 - Compare Solana Mainnet with Private Channels across governance, visibility, validator sets, and fee models
-- Distinguish confidential computation (Arcium's MPC, Light Protocol's ZK compression) from amount-hiding, and match privacy trust models - ZK proofs, MPC, TEEs - to institutional risk requirements
+- Distinguish confidential computation (Arcium's MPC) and Helius's ZK-compression-based privacy layer from amount-hiding, and match privacy trust models - ZK proofs, MPC, TEEs - to institutional risk requirements
 
 ## Topics Covered
 
@@ -26,7 +26,7 @@ By the end of this module, participants will be able to:
 - Private Channels architecture and transaction pipeline
 - Private Channels in practice - banking use case
 - Private Channels vs Mainnet comparison
-- The wider privacy ecosystem - confidential computation (Arcium, Light Protocol)
+- The wider privacy ecosystem - confidential computation (Arcium) and Helius Privacy Rings
 
 ## Slides
 
@@ -51,15 +51,15 @@ With new cryptography, institutions can still allow verifiability & trustlessnes
 
 The privacy stack is organized into different layers, each solving a different scope of the problem.
 
-**Token layer - Confidential Balances.** Confidential Balances is the Token-2022 standard for encrypted token state - an umbrella that covers Confidential Transfers (encrypted transfer amounts), Confidential Mint and Burn, and confidential transfer fees. Balances and amounts are encrypted on-chain with (twisted) ElGamal encryption and Pedersen commitments, hidden from public observers while remaining verifiable through zero-knowledge proofs. It is live on Mainnet and composable with other Token-2022 extensions. Note for an enterprise audience: the underlying ZK ElGamal Proof program was disabled in June 2025 after a soundness bug (forgeable proofs) was found, then patched, re-audited, and re-enabled - worth knowing as a maturity signal, though the feature is available again today. Throughout this module, "Confidential Transfer" refers specifically to the transfer operation within the broader Confidential Balances standard.
+**Token layer - Confidential Balances.** Confidential Balances is the Token-2022 standard for encrypted token state - an umbrella that covers Confidential Transfers (encrypted transfer amounts), Confidential Mint and Burn, and confidential transfer fees. Balances and amounts are encrypted on-chain with (twisted) ElGamal encryption and Pedersen commitments, hidden from public observers while remaining verifiable through zero-knowledge proofs. It is live on Mainnet and composable with other Token-2022 extensions. Note for an enterprise audience: the underlying ZK ElGamal Proof program was disabled on June 19, 2025 after a soundness bug (forgeable proofs, a Fiat-Shamir flaw) was found, then patched, re-audited, and re-enabled on mainnet in June 2026 via Agave 4.0 - worth knowing as a maturity signal, though the feature is available again today. Throughout this module, "Confidential Transfer" refers specifically to the transfer operation within the broader Confidential Balances standard.
 
-**Channel layer - Private Channels (formerly Contra).** Private Channels is a private payment channel with direct access to Solana Mainnet liquidity. (The product was rebranded from "Contra"; the codebase and brochure still carry the Contra name.) Transactions inside the channel are completely private - no public mempool, no data leakage. Operators control validation, ordering, access rules, and compliance frameworks. Settlement happens in 100ms batches with zero per-transaction fees.
+**Channel layer - Private Channels (formerly Contra).** Private Channels is a private payment channel with direct access to Solana mainnet liquidity. (The product was rebranded from "Contra"; the codebase and brochure still carry the Contra name.) Transactions inside the channel are completely private - no public mempool, no data leakage. Operators control validation, ordering, access rules, and compliance frameworks. Settlement happens in 100ms batches with zero per-transaction fees.
 
 ## 3. Token Extensions Architecture
 
 Confidential Balances is itself a suite of Token-2022 extensions, not a single feature. It spans confidential **transfers** (encrypted transfer amounts, the focus of Sections 4-6), confidential **mint and burn** (issuance and redemption without revealing quantities), and confidential **transfer fees** (fees that stay encrypted alongside the amounts they apply to). All three share the same cryptographic machinery below. It is important to understand where this suite sits alongside the other Token-2022 extensions participants have already seen.
 
-Available extensions include Transfer Fees, Interest-Bearing Tokens, Non-Transferable Tokens, Transfer Hook, Freeze Authority, and Metadata Extension. Confidential Balances is composable with these - a token can have encrypted amounts and transfer hooks and freeze authority simultaneously.
+Available extensions include Transfer Fees, Interest-Bearing Tokens, Non-Transferable Tokens, Transfer Hook, Default Account State, Pausable, and Metadata Extension. (Freeze authority is not an extension - it is a core field on every mint.) Confidential Balances is composable with these - a token can have encrypted amounts, transfer hooks, and a freeze authority simultaneously.
 
 The key cryptographic primitives:
 
@@ -132,13 +132,13 @@ The separation of encryption_key from signing key per account means decryption r
 
 ## 7. Private Channels - Private Payment Channels (formerly Contra)
 
-Private Channels is a payment channel with direct access to over $100B in Solana Mainnet liquidity. It provides privacy by default, operator-controlled rules, instant settlement, and zero per-transaction fees.
+Private Channels is a payment channel with direct access to Solana mainnet liquidity. It provides privacy by default, operator-controlled rules, instant settlement, and zero per-transaction fees.
 
 **Privacy by default.** No public mempool. Transactions inside the channel are completely private - no front-running, no data leakage to external observers.
 
 **Operational sovereignty.** Operators control validation, ordering, access rules, rate limits, and compliance frameworks. Full governance over the channel.
 
-**Instant settlement.** Thousands of transactions per second with 100ms settlement batches. Near-instant finality without waiting for Mainnet block times.
+**Instant settlement.** Thousands of transactions per second with 100ms settlement batches. Near-instant finality inside the channel, independent of mainnet slot times.
 
 **Mainnet liquidity access.** Assets in Private Channels are locked in a Mainnet escrow program and are always accessible. Withdrawals burn channel tokens and release SPL tokens on Mainnet.
 
@@ -172,7 +172,7 @@ A concrete example: how a bank runs a private payment channel for its customers.
 
 **Withdrawal.** A customer requests withdrawal inside the channel. The Withdrawal Program burns channel tokens. The escrow releases SPL tokens on Mainnet. Optional: batched or confidential transfer settlement.
 
-Key metrics: over $100B in Mainnet liquidity accessible, 100ms settlement batch interval, thousands of transactions per second, and $0 per-transaction channel fees.
+Key metrics: direct access to mainnet liquidity, 100ms settlement batch interval, thousands of transactions per second, and $0 per-transaction channel fees.
 
 ## 10. Beyond the Stack - the Wider Privacy Ecosystem
 
@@ -184,21 +184,21 @@ Arcium is a decentralized network for confidential computation built on **multip
 
 What it enables: dark pools and sealed-bid auctions (orders stay secret until clearing), private lending, and other flows where the computation itself, not just the balances, must be hidden. A confidential SPL token standard extends Arcium to programmable private assets, so encrypted state can be composed into on-chain logic.
 
-Status (as of June 2026): live on **mainnet alpha** (reached February 2026), having processed 900,000+ encrypted computations, with live applications already ranking among Solana's top protocols by revenue. "Alpha" is the operative caveat for an institutional reader - anyone can deploy but its permissioned to become an MPC node.
+Status (as of November 2026): live on **Mainnet Alpha** since February 2, 2026 (Umbra was the first application); the full decentralized mainnet is **pending**. "Alpha" is the operative caveat for an institutional reader - anyone can deploy, but becoming an MPC node is permissioned.
 
-### Helius Privacy
+### Helius Privacy Rings
 
-Light Protocol is being built into what Helius (a major Solana infrastructure provider, which acquired it) calls a **canonical privacy layer for Solana**, built on **ZK compression**. Where Arcium hides computation and Confidential Balances hides amounts, this layer targets encrypted balances and payments, private markets, and the selective disclosure institutions require while still having full control over their environment - aiming to be a general-purpose, developer-facing privacy primitive rather than a single application.
+Helius (a major Solana infrastructure provider) acquired Light Protocol on June 10, 2026 and is building it into what it calls a **canonical privacy layer for Solana**, built on **ZK compression**. ZK Compression itself continues via Helius RPC; the Light Token SDK is being sunset, so new builds should follow Helius's docs rather than Light's. Where Arcium hides computation and Confidential Balances hides amounts, this layer targets encrypted balances and payments, private markets, and the selective disclosure institutions require while still having full control over their environment - aiming to be a general-purpose, developer-facing privacy primitive rather than a single application.
 
-Status (as of June 2026): **announced, not yet live.** Developer access is expected later in 2026. Treat it as a roadmap item, not something to design against today.
+Status (as of November 2026): **Solana Privacy Rings launched on mainnet on November 10, 2026** ([Helius](https://www.helius.dev/blog/solana-privacy-rings)). The permissionless Default Ring encrypts balances and transfer amounts while wallet addresses stay visible. **Custom Rings** - the permissioned variant with institutional compliance controls such as KYC allowlists and freezing - was still under audit at launch and should be treated as **pending**. It is days old: evaluate it as an early production system, not a proven one.
 
 ### Also in the ecosystem
 
 Worth knowing, each resting on a distinct trust model, so institutions can match the approach to their own risk and regulatory posture:
 
-- **MagicBlock** - hardware-attested confidentiality via trusted execution environments (TEEs), added to existing Solana programs without rewrites. Suited to confidential order books and real-time trading. Trust model: trusted hardware.
+- **MagicBlock** - hardware-attested confidentiality via trusted execution environments (TEEs), designed to be added to existing Solana programs with minimal changes. Aimed at confidential order books and real-time trading. Trust model: trusted hardware.
 - **Bonsol** - zero-knowledge proofs of off-chain computation, verified on-chain. For heavy or private workloads.
-- **Noctura and Yona** - shielded-pool anonymity for transfers and swaps (hiding participants, not just amounts), with compliance-oriented disclosure modes.
+- **Noctura and Yona** - early-stage shielded-pool designs for transfers and swaps (hiding participants, not just amounts), with compliance-oriented disclosure modes. Verify production status before relying on them.
 
 The takeaway for an architect: On Solana, privacy is not one technique but a spectrum - ZK proofs (verifiable by anyone), MPC (no colluding majority), and TEEs (trust the hardware vendor). Maturity ranges from production-live to announced. Match the model to the threat you actually need to defend against, and confirm each protocol's current production status before relying on it - these move fast.
 
@@ -216,3 +216,4 @@ The takeaway for an architect: On Solana, privacy is not one technique but a spe
 - [Private Channels - Solana Launch](https://launch.solana.com/products/private-channels)
 - [Arcium](https://www.arcium.com/) - decentralized confidential computation (MPC)
 - [Helius - acquiring Light Protocol to build a canonical privacy layer](https://www.helius.dev/blog/light-protocol-acquisition)
+- [Helius - Solana Privacy Rings are live on mainnet](https://www.helius.dev/blog/solana-privacy-rings)

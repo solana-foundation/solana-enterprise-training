@@ -61,7 +61,7 @@ async function main() {
   console.log(`\n  Token ${isPause ? "PAUSED" : "RESUMED"}`);
   if (isPause) {
     console.log("  All transfers, minting, and burning are now blocked.");
-    console.log("  Run with 'resume' argument to re-enable: npx tsx src/05-pause-token.ts resume");
+    console.log("  Run with 'resume' argument to re-enable: npm run pause-token -- resume");
   } else {
     console.log("  Normal token operations have been restored.");
   }

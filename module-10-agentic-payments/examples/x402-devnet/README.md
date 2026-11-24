@@ -2,7 +2,9 @@
 
 Minimal x402 payment flow on Solana devnet with no facilitator and no x402 SDK: an Express server that quotes, verifies, and settles SPL token payments, and a Node client that pays automatically. Includes the JWT session improvement (lab step 3) - one verified payment grants 5 minutes of access without further payments.
 
-Built on **@solana/kit** (Web3.js 2.0) with **@solana-program/token** - the current recommended client stack. Highlights of the Kit approach:
+**Protocol version: x402 v1 (legacy).** This example speaks the v1 wire format - `X-PAYMENT` header, `x402Version: 1`, network name `solana-devnet`. x402 v2 (released Dec 11 2025, taught in the module README) renames the headers to `PAYMENT-REQUIRED` / `PAYMENT-SIGNATURE` / `PAYMENT-RESPONSE` and uses CAIP-2 network IDs (devnet: `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1`). The verification pipeline below is the same in both versions.
+
+Built on **@solana/kit** (formerly web3.js 2.0) with **@solana-program/token** - the current recommended client stack. Highlights of the Kit approach:
 
 - `pipe(createTransactionMessage(...))` for functional transaction building
 - `getCreateAssociatedTokenIdempotentInstruction` - recipient ATA creation without an existence check

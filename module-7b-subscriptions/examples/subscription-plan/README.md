@@ -47,4 +47,4 @@ Things to look at along the way:
 
 - The plugin client resolves transfer-hook accounts automatically for Token-2022 mints with hooks. Mints with PermanentDelegate, ConfidentialTransfer, TransferFee, Pausable, NonTransferable, or MintCloseAuthority are rejected by the program (README Section 8).
 - `lab-state.json` carries PDAs between scripts; delete it to start over.
-- Pinned versions: `@solana/kit ^7.1`, plugins `0.17.0`, `@solana/subscriptions 0.5.0`, `@solana-program/token 0.15.0` - these peer-match. Newer kit-plugin releases require kit 8.
+- Pinned versions: `@solana/kit ^7.1`, plugins `0.17.0`, `@solana/subscriptions 0.5.0`, `@solana-program/token 0.15.0` - these peer-match. Kit 8 is the current major on npm and newer kit-plugin releases require it; the example stays on kit 7 until its plugin pins are bumped together.

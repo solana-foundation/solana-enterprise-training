@@ -40,9 +40,12 @@ Solana's core insight is a fundamentally different approach to transaction order
 
 Traditional blockchains like Ethereum process transactions sequentially - each must complete before the next begins. This creates a bottleneck: approximately 15 TPS, 12-second block times, and unpredictable fees.
 
-Solana takes a different approach on two fronts. First, a **pre-computed leader schedule** means everyone knows in advance which validator produces each ~400ms slot, so transactions are forwarded straight to the right block producer instead of sitting in a global mempool. Second, every transaction **declares upfront which accounts it reads and writes**, so the runtime can execute non-conflicting transactions in parallel across multiple cores.
+Solana takes a different approach on two fronts. First, a **pre-computed leader schedule** means everyone knows in advance which validator produces each 200ms slot, so transactions are forwarded straight to the right block producer instead of sitting in a global mempool. Second, every transaction **declares upfront which accounts it reads and writes**, so the runtime can execute non-conflicting transactions in parallel across multiple cores.
 
-**The result:** ~3,000+ TPS, ~400ms slots, finality targeted at ~150ms, and fees below $0.001.
+**The result:** thousands of user transactions per second within a 100M compute unit (CU) block limit, 200ms slots (an epoch of 432,000 slots is about 1 day), finality targeted at ~150ms, and fees below $0.001.
+
+> [!NOTE]
+> Slot time and finality are different things: a *slot* is the leader's window to produce a block (200ms since SIMD-0525 completed in October 2026); *finality* is how long until that block is irreversible (~150ms target under Alpenglow). Older material quoting "400ms block times" or a single TPS figure predates these changes - TPS figures from before Alpenglow included on-chain vote transactions, so they are not comparable with today's numbers. See [solana.com/upgrades](https://solana.com/upgrades) and [100M CU blocks](https://solana.com/upgrades/100m-cu-blocks).
 
 > [!NOTE]
 > **Alpenglow (activated on mainnet on October 21, 2026, epoch 1064).** Solana originally relied on **Proof of History (PoH)**, a continuous SHA-256 hash chain acting as a cryptographic clock, plus **Tower BFT**, a vote-and-lockout consensus where finality took ~12.8 seconds. Alpenglow's first phase, **Votor**, retires both: slots are now paced by fixed timers and local validator timeouts rather than a hash chain, and validators finalize blocks by exchanging votes directly with each other. Finality drops from ~12.8s to a ~150ms target. You will still see PoH and Tower BFT in older docs and talks - treat them as history, not as how mainnet works today.
@@ -53,7 +56,7 @@ Solana's architecture is composed of several interconnected components that work
 
 **Gulf Stream - Transaction Forwarding.** Before a validator becomes leader, other validators and clients already know it is coming thanks to the pre-computed leader schedule. They forward transactions directly to the upcoming leader's memory. By the time the slot starts, the leader has a warm queue ready to execute immediately. There is no idle mempool.
 
-**Block Building - Leader Execution.** The leader takes queued transactions, deduplicates them, and runs them through Sealevel in parallel. It has a fixed ~400ms slot to build its block; validators use local timeouts to decide when a leader has missed its slot and the slot should be skipped. (Before Alpenglow, the leader also mixed batches of transactions into the Proof of History hash chain, and that chain served as the network's clock. Alpenglow removed PoH from consensus.)
+**Block Building - Leader Execution.** The leader takes queued transactions, deduplicates them, and runs them through Sealevel in parallel. It has a fixed 200ms slot to build its block; validators use local timeouts to decide when a leader has missed its slot and the slot should be skipped. (Before Alpenglow, the leader also mixed batches of transactions into the Proof of History hash chain, and that chain served as the network's clock. Alpenglow removed PoH from consensus.)
 
 **Turbine - Block Propagation.** The leader cannot send the full block to all validators at once. Turbine breaks the block into small packets and propagates them through a layered tree of validators. Each validator receives its chunk and forwards pieces to a small neighborhood below it - inspired by BitTorrent. Turbine is still in use after Alpenglow's first phase. A later phase, **Rotor**, will replace it with single-hop, stake-weighted relays; Rotor needs its own SIMD and has no activation date yet.
 
@@ -92,7 +95,7 @@ Understanding the differences between Solana and EVM-based chains is essential f
 
 **State Model.** Ethereum stores state inside smart contracts - the contract owns its storage. Solana separates programs (code) from accounts (data). Programs are stateless; data lives in separate accounts. This makes programs more composable and parallelizable.
 
-**No Re-Entrancy.** On Ethereum, re-entrancy is a runtime problem that developers must guard against (as demonstrated by the 2016 DAO hack). On Solana, the runtime enforces a hard rule: a program cannot be re-entered while it is already in the call stack. This entire class of vulnerability is structurally prevented at the protocol level.
+**No Re-Entrancy.** On Ethereum, re-entrancy is a runtime problem that developers must guard against (as demonstrated by the 2016 DAO hack). On Solana, the runtime rejects indirect re-entrancy: if program A calls B, B cannot call back into A (A→B→A fails). Direct self-recursion (A calling A) is allowed, and cross-program invocations are capped at 4 levels of nesting. The classic DAO-style callback attack is structurally prevented at the protocol level.
 
 **Parallel Execution.** Solana transactions declare which accounts they will read or write upfront. The runtime uses this to execute non-conflicting transactions simultaneously across multiple cores.
 
@@ -102,13 +105,13 @@ Understanding the differences between Solana and EVM-based chains is essential f
 
 **Upgradability.** Solana programs are upgradable by default, allowing teams to iterate on deployed programs.
 
-**Fee Model.** Solana uses a base fee per signature (5,000 lamports) plus an optional priority fee, rather than Ethereum's global gas auction.
+**Fee Model.** Solana uses a base fee per signature (5,000 lamports) plus an optional priority fee priced per requested compute unit, rather than Ethereum's global gas auction.
 
 | Aspect | Ethereum (EVM) | Solana (SVM) |
 |--------|----------------|--------------|
 | Contract Model | Stateful - contract + state combined | Stateless - program and state separated |
 | Execution | Single-threaded | Multi-threaded, parallel |
-| Re-Entrancy | Possible - developer must guard against it | Structurally prevented by the runtime |
+| Re-Entrancy | Possible - developer must guard against it | Indirect re-entrancy (A→B→A) rejected by the runtime |
 | Transaction Forwarding | Global mempool | Gulf Stream - direct forwarding to leader |
 | Finality | ~12.8 minutes (2 epochs) | ~150ms target (Alpenglow Votor) |
 | Upgradability | Immutable by default (proxy patterns required) | Upgradable by default |
@@ -146,9 +149,9 @@ Programs are a special type of account with the executable flag set to `true`. T
 
 A program can own non-executable accounts. For example, a program that tracks user points would create accounts to store that data, and those accounts would be owned by the program. A program must be the owner of an account in order to modify its state; otherwise, it can only read data.
 
-Programs are managed by the BPF Loader. The latest version is the Upgradeable BPF Loader, which allows programs to be updated after deployment.
+Programs are managed by the BPF Loader. The Upgradeable BPF Loader (loader-v3) is the standard loader for deployments and allows programs to be updated after deployment. Once SIMD-0500 activates (expected with Agave 4.4; **pending**), new deployments and upgrades must target the sBPFv3 bytecode format; existing programs keep running unchanged.
 
-**Native Programs** (such as the System Program and SPL Token Program) are provided by Solana. **User Programs** are written and deployed by developers.
+**Native Programs** (such as the System Program and SPL Token Program) are provided by Solana. (Since May 2026 the SPL Token program runs **p-token**, a much cheaper drop-in reimplementation at the same address - see Module 3.) **User Programs** are written and deployed by developers.
 
 ### Program and Account Ownership
 
@@ -170,7 +173,7 @@ flowchart TD
 "Rent" is the deposit an account holds to cover the cost of storing its data on-chain. When an account is created, this deposit is set based on the amount of space allocated.
 
 - **Rent must be paid to create an account** — based on the space it allocates
-- **Pay 2 years' worth upfront** to make the account **rent-exempt**
+- **Deposit the rent-exempt minimum** - historically defined as 2 years' worth of rent - to make the account **rent-exempt**
 - **All new accounts must be rent-exempt** — this is required at account creation
 - **Closing** an account lets the full deposit be reclaimed
 - **Resizing** an account costs or returns the difference
@@ -178,6 +181,9 @@ flowchart TD
 
 > [!IMPORTANT]
 > **"Rent" is a refundable deposit, not a fee — you are never actually charged this amount.** The lamports sit in the account's own balance and are returned in full when the account is closed. The "2 years" figure is only how the rent-exempt threshold is *calculated*; it is not a recurring cost. The legacy mechanism that once periodically collected rent from non-exempt accounts has been retired, so today every account is simply rent-exempt from creation and never debited.
+
+> [!WARNING]
+> **The rent rate is being reduced - never hardcode it.** The rent-exempt minimum is `(128 + data_len) × lamports_per_byte`. Historically `lamports_per_byte` was 6,960 (3,480 lamports per byte-year × 2 years). **SIMD-0437** is lowering it toward 696 in feature-gated steps: step 1 (to 6,333) went live on September 3, 2026 (epoch 1028), and later steps are **pending** (Agave 4.4). Existing accounts are grandfathered. Always query the current value: `getMinimumBalanceForRentExemption(size)` from a client, `Rent::get()?.minimum_balance(len)` on-chain, or `solana rent <bytes>` from the CLI. See [Reduced rent](https://solana.com/upgrades/reduced-rent).
 
 ## 8. Transactions
 
@@ -199,6 +205,16 @@ EVM has no native transaction-level batching (a transaction hits one entry point
   "signers": "Array<Uint8Array>"
 }
 ```
+
+**Transaction size and formats.** Every transaction must fit a size cap, and there are now three formats:
+
+| Format | Max size | Accounts | Compute budget set via |
+|--------|----------|----------|------------------------|
+| Legacy | 1,232 bytes | Inline | ComputeBudget instructions |
+| v0 | 1,232 bytes | Inline + Address Lookup Tables (ALTs) | ComputeBudget instructions |
+| v1 (live September 15, 2026) | 4,096 bytes | Inline only - no ALTs | Header fields |
+
+v1 transactions (SIMD-0296 + SIMD-0385) allow up to 12 signatures, 64 accounts and 64 instructions, and carry the CU limit, priority fee, and other compute budget values in header fields - always set them explicitly. See [Larger transaction sizes](https://solana.com/upgrades/larger-transaction-sizes).
 
 **Lifecycle of a Transaction:**
 
@@ -232,16 +248,20 @@ All on-chain actions require compute units (CUs). Compute units measure the comp
 | Default CU limit per instruction | 200,000 |
 | Built-in instruction default CU | 3,000 |
 | Max CU limit per transaction | 1,400,000 |
+| Max CU per writable account per block | 12,000,000 |
+| Max CU per block | 100,000,000 |
 
-You can request additional compute units (up to 1.4 million per transaction), but this is generally not advised unless absolutely necessary. Because there is a limit of compute units per block, transactions with large compute unit requests may have a lower chance of being included in a block.
+You can request additional compute units (up to 1.4 million per transaction), but this is generally not advised unless absolutely necessary. Because there is a limit of compute units per block (100M since SIMD-0286 went live in July 2026) and per writable account (12M), transactions with large compute unit requests may have a lower chance of being included in a block.
 
 ## 11. Fee Model
 
 Solana's fee model differs significantly from Ethereum's global gas auction. On Solana, fees are structured as a local market:
 
-- **Base fee:** 5,000 lamports per signature. This is a fixed cost.
-- **Priority fee:** Lamports multiplied by compute units (optional). This functions as a tip to the leader validator.
+- **Base fee:** 5,000 lamports per signature. This is a fixed cost: **50% is burned, 50% goes to the leader**.
+- **Priority fee:** compute unit price (in micro-lamports per CU) multiplied by the requested CU limit (optional). **100% goes to the leader** (SIMD-0096), so it functions as a tip for inclusion.
 - **Rent:** A deposit to keep an account alive on-chain. Refundable when the account is closed.
+
+Fees are charged per signature and per requested CU - not per writable account. The market is *local*: heavy contention on a hot writable account (a popular pool or mint) raises the priority fee needed by transactions that touch that account, without raising fees for the rest of the network.
 
 ---
 
