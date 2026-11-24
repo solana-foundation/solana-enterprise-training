@@ -44,6 +44,16 @@ A curated collection of references, tools, and supplementary materials.
 - [Solana Program Examples](https://github.com/solana-developers/program-examples) - Official collection of example programs
 - [Token Program Examples](https://github.com/solana-developers/program-examples/tree/main/tokens) - Token-specific examples
 
+## Validators and Staking
+
+- [Anza Validator Operations Docs](https://docs.anza.xyz/operations/setup-a-validator) - Setting up and running an Agave validator
+- [Anza Hardware Requirements](https://docs.anza.xyz/operations/requirements) - Validator and RPC node specs
+- [Solana BLS Keys and the Validator Admission Ticket](https://solana.com/upgrades/bls-pubkey-vat) - Alpenglow operator requirements
+- [Firedancer Documentation](https://docs.firedancer.io) - The independent validator client
+- [Solana Foundation Delegation Program](https://solana.org/delegation-program) - Criteria and program rules for new operators
+- [validators.app](https://www.validators.app) and [stakewiz](https://stakewiz.com) - Validator performance and due diligence
+- [Solana Compass Decentralization Stats](https://solanacompass.com/statistics/decentralization) - Validator count, Nakamoto coefficient, client share
+
 ## Solana Foundation Curriculum
 
 - [Solana Foundation Curriculum Repository](https://github.com/solana-foundation/curriculum) - Open-source training curriculum

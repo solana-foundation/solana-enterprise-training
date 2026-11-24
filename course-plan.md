@@ -201,6 +201,21 @@ Companion to Module 1 for EVM-native teams; runnable as a standalone session.
 
 **Slides:** [Security on Solana slides](module-11-security-on-solana/Security%20on%20Solana%20-%20Slides.pptx)
 
+### Module 12 - Validators on Solana
+
+**Topics:**
+- What a validator does after Alpenglow: leader slots, block building, off-chain BLS voting, stake weight
+- Node types: consensus validator vs. RPC node vs. Geyser/indexing node, and which one an enterprise needs
+- Validator clients (Agave, Jito-Agave, Firedancer) and client diversity
+- The validator account model: identity, vote account, authorized voter/withdrawer, BLS key, stake accounts and authorities
+- Validator economics: inflation, commissions, block fees, MEV, the Validator Admission Ticket (VAT), and break-even
+- Enterprise staking options: native delegation, LSTs, custodial staking, running your own validator; validator due diligence
+- The Solana Foundation Delegation Program (SFDP): how delegation works, its history, the November 2026 changes (12-month membership, 100-validator cap, 300k SOL graduation), the reasons behind them, and the debate around them
+- Build vs. buy for RPC and validator infrastructure
+- Operations: hardware, key custody, monitoring, upgrades, failover
+
+**Slides:** [Link to Validators on Solana slides - PLACEHOLDER]
+
 ## Assessment Approach
 
 Specific modules includes a hands-on challenge that requires participants to apply the concepts covered.

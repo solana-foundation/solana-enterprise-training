@@ -1,0 +1,22 @@
+{
+  "name": "staking-kit",
+  "version": "1.0.0",
+  "description": "Inspect validators and run the native stake account lifecycle using @solana/kit",
+  "type": "module",
+  "scripts": {
+    "inspect-validators": "npx tsx src/01-inspect-validators.ts",
+    "create-and-delegate": "npx tsx src/02-create-and-delegate.ts",
+    "check-stake": "npx tsx src/03-check-stake.ts",
+    "deactivate-withdraw": "npx tsx src/04-deactivate-withdraw.ts"
+  },
+  "dependencies": {
+    "@solana-program/stake": "~0.8.0",
+    "@solana-program/system": "^0.13.0",
+    "@solana/kit": "^7.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.3"
+  }
+}

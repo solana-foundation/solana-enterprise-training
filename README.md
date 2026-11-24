@@ -23,6 +23,7 @@ This training program is structured into several modules that progressively buil
 | 9 | [Indexing on Solana](module-9-indexing-on-solana/) | Geyser, Yellowstone gRPC, indexing frameworks, storage strategies, and real-time streaming |
 | 10 | [Agentic Payments](module-10-agentic-payments/) | Machine-to-machine micropayments with the x402 protocol, facilitators, and the agent commerce ecosystem |
 | 11 | [Security on Solana](module-11-security-on-solana/) | The runtime security model, the program vulnerability checklist, Anchor's guarantees and limits, real exploit case studies, and the audit lifecycle |
+| 12 | [Validators on Solana](module-12-validators-on-solana/) | What validators do after Alpenglow, node types, clients, the vote/stake account model, validator economics and the VAT, enterprise staking options, build-vs-buy, and operations |
 
 ## Prerequisites
 
@@ -91,7 +92,10 @@ enterprise-training/
 ├── module-10-agentic-payments/
 │   ├── README.md
 │   └── examples/
-└── module-11-security-on-solana/
+├── module-11-security-on-solana/
+│   ├── README.md
+│   └── challenge/
+└── module-12-validators-on-solana/
     ├── README.md
-    └── challenge/
+    └── examples/
 ```
