@@ -71,6 +71,16 @@ A curated collection of references, tools, and supplementary materials.
 - [Solana Pay Documentation](https://docs.solanapay.com/)
 - [@solana/instruction-plans](https://www.npmjs.com/package/@solana/instruction-plans)
 
+## Validators and Staking
+
+- [Anza Validator Operations Docs](https://docs.anza.xyz/operations/setup-a-validator) - Setting up and running an Agave validator
+- [Anza Hardware Requirements](https://docs.anza.xyz/operations/requirements) - Validator and RPC node specs
+- [Solana BLS Keys and the Validator Admission Ticket](https://solana.com/upgrades/bls-pubkey-vat) - Alpenglow operator requirements
+- [Firedancer Documentation](https://docs.firedancer.io) - The independent validator client
+- [Solana Foundation Delegation Program](https://solana.org/delegation-program) - Criteria and program rules for new operators
+- [validators.app](https://www.validators.app) and [stakewiz](https://stakewiz.com) - Validator performance and due diligence
+- [Solana Compass Decentralization Stats](https://solanacompass.com/statistics/decentralization) - Validator count, Nakamoto coefficient, client share
+
 ## Slide Decks
 
 - [Solana Overview Slides](https://docs.google.com/presentation/d/1C4mEhjs83HvIVG_VeXH30I4m5h2hGK9vjOiKWf63TSM/edit?usp=sharing)
