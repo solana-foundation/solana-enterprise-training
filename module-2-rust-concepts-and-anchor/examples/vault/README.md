@@ -79,14 +79,14 @@ pub fn handler(ctx: Context<Initialize>) -> Result<()> {
 
     anchor_lang::system_program::transfer(
         cpi_ctx,
-        Rent::free().minimum_balance(ctx.accounts.vault.data_len()),
+        Rent::get()?.minimum_balance(ctx.accounts.vault.data_len()),
     )?;
 
     Ok(())
 }
 ```
 
-In here, we perform a CPI to the System Program to transfer enough lamports from the user to the vault to cover the rent-exempt minimum balance.
+In here, we perform a CPI to the System Program to transfer enough lamports from the user to the vault to cover the rent-exempt minimum balance. `Rent::get()` reads the current rate from the Rent sysvar. (Don't confuse it with `Rent::free()`, which is a zero-rate `Rent` value and would transfer nothing.)
 
 ---
 

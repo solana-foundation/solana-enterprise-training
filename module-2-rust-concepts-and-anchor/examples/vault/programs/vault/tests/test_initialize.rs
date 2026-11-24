@@ -63,4 +63,10 @@ fn test_initialize() {
     // Send the transaction to the LiteSVM and check the result
     let res = svm.send_transaction(tx);
     assert!(res.is_ok());
+
+    // The vault must now hold exactly the rent-exempt minimum for a zero-data system account
+    let vault_account = svm.get_account(&vault).expect("vault account should exist after initialize");
+    let expected = svm.minimum_balance_for_rent_exemption(0);
+    assert!(expected > 0);
+    assert_eq!(vault_account.lamports, expected);
 }
