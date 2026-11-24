@@ -44,8 +44,11 @@ pub fn handler(ctx: Context<Initialize>) -> Result<()> {
     let cpi_ctx = CpiContext::new(ctx.accounts.system_program.key(), cpi_accounts);
 
     // Perform the transfer of lamports from the initializer to the vault
-    // We need to specify the amount of lamports to transfer, which should be enough to cover the rent-exempt balance for the vault account
-    anchor_lang::system_program::transfer(cpi_ctx, Rent::free().minimum_balance(ctx.accounts.vault.data_len()))?;
+    // We need to specify the amount of lamports to transfer, which should be enough to cover the rent-exempt balance for the vault account.
+    // Read the live rate from the Rent sysvar (Rent::get) - never hardcode it, and never use Rent::free(),
+    // which is a zero-rate Rent value and would transfer 0 lamports.
+    let rent_exempt_minimum = Rent::get()?.minimum_balance(ctx.accounts.vault.data_len());
+    anchor_lang::system_program::transfer(cpi_ctx, rent_exempt_minimum)?;
 
     msg!("Vault initialized successfully!");
     Ok(())
