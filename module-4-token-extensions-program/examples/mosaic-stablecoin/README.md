@@ -51,6 +51,18 @@ This project shows enterprise compliance officers and engineering teams how Sola
 - **Solana CLI** installed (`solana --version`)
 - A funded **devnet wallet** (`solana airdrop 2 --url devnet`)
 
+> [!NOTE]
+> The npm scripts run `node --experimental-wasm-modules --import tsx ...` because the Mosaic SDK's confidential-balance code loads the `@solana/zk-sdk` WASM module. Use `npm run <script>` rather than calling `npx tsx` directly.
+>
+> To run against a local validator instead of devnet, clone the Token ACL programs into it and point `RPC_URL` at it:
+>
+> ```bash
+> solana-test-validator --reset --url devnet \
+>   --clone-upgradeable-program TACLkU6CiCdkQN2MjoyDkVg2yAH9zkxiHDsiztQ52TP \
+>   --clone-upgradeable-program GATEzzqxhJnsWF6vHRsgtixxSB8PaQdcqGEVTEHWiULz
+> # .env: RPC_URL=http://127.0.0.1:8899
+> ```
+
 ### 1. Clone and install
 
 ```bash
@@ -96,7 +108,7 @@ npm run force-transfer
 
 # Step 5: Pause all token operations
 npm run pause-token
-# Resume: npx tsx src/05-pause-token.ts resume
+# Resume: npm run pause-token -- resume
 
 # Step 6: Inspect the token's on-chain state
 npm run inspect-token
@@ -133,7 +145,7 @@ Token account balances are encrypted on-chain. Only the account owner (and the c
 - **Solana Token-2022** - the on-chain token program with extension support
 - **Mosaic SDK** (`@solana/mosaic-sdk`) - high-level TypeScript SDK wrapping Token-2022
 - **sRFC-37** - Solana Request for Comment for permissioned tokens (Token ACL + ABL programs)
-- **Solana Kit** (`@solana/kit` v5) - modern Solana TypeScript client
+- **Solana Kit** (`@solana/kit` v6.10, the version `@solana/mosaic-sdk` 0.2 is built on) - modern Solana TypeScript client
 
 ---
 
@@ -149,7 +161,7 @@ Key points for evaluation:
 - **Deny-list enforcement is atomic.** A single transaction adds to the list and freezes the account.
 - **Asset seizure requires no owner cooperation.** The Permanent Delegate can move tokens unilaterally.
 - **Emergency pause is instant and global.** One transaction halts all operations.
-- **Everything runs on Solana devnet today.** No custom programs needed - Mosaic uses standard Token-2022 extensions.
+- **Everything runs on Solana devnet and mainnet today.** No custom programs needed - Mosaic uses standard Token-2022 extensions plus the deployed Token ACL programs. Confidential Balances work again on mainnet since the ZK ElGamal Proof program was re-enabled in June 2026 (see Module 8).
 
 ---
 

@@ -49,7 +49,7 @@ A $10,000 cross-border payment through the traditional system costs roughly $87-
 
 Solana solves these pain points and delivers the performance characteristics needed to process institutional-scale payment volume.
 
-**Instant settlement.** Funds are secured in approximately 400ms and confirmed with supermajority consensus in seconds. The receiver can act on the funds immediately.
+**Instant settlement.** Slots are 200ms, and since the Alpenglow upgrade (October 2026) transactions reach finality with a ~150ms target - the `confirmed` and `finalized` commitment levels effectively converge. The receiver can act on the funds immediately.
 
 **Sub-cent fees.** The median fee is under $0.001 per transaction. Multiple payments can be batched into a single transaction, further reducing cost per transfer.
 
@@ -57,7 +57,9 @@ Solana solves these pain points and delivers the performance characteristics nee
 
 **Programmable compliance.** Payments on Solana are programmable. Token Extensions enable compliance checks - KYC gates, transfer restrictions, memo requirements - natively with every token.
 
-The same $10,000 payment on Solana: confirmed in 400ms, fee of approximately $0.001, atomic (all-or-nothing), no intermediaries.
+**Institutional adoption.** Stablecoin supply on Solana was roughly $15.7 billion as of October 2026, after an all-time high of about $17.3 billion in September 2026 ([Solana Compass](https://solanacompass.com/news/solana-stablecoin-supply-hits-new-all-time-high-of-173b)). Since December 16, 2025, Visa has offered USDC settlement on Solana to US bank partners ([The Block](https://www.theblock.co/news/business/2025-12-16-visa-launches-stablecoin-settlement-us-circle-usdc-solana-382721)) - card-network settlement running over the same rails covered in this module.
+
+The same $10,000 payment on Solana: finalized in well under a second (~150ms finality target), fee of approximately $0.001, atomic (all-or-nothing), no intermediaries.
 
 ## 3. Mapping Traditional Concepts to Solana
 
@@ -121,19 +123,19 @@ Multiple transfers can be packed into a single transaction - one signature, one 
 
 **Composition.** Each transfer instruction is built independently and then composed at the transaction level. This modular approach makes it straightforward to construct complex payment batches.
 
-**Transaction size limit.** Transactions have an approximately 1,232 byte size limit. Only a limited number of transfer instructions can fit into one transaction before hitting that ceiling.
+**Transaction size limit.** Legacy and v0 transactions are capped at 1,232 bytes, which limits how many transfer instructions fit in one transaction (v0 can stretch this with Address Lookup Tables). Since September 15, 2026, **v1 transactions** allow up to 4,096 bytes, so a single atomic batch can carry many more transfers. v1 carries accounts inline (no Address Lookup Tables) and sets the compute budget - CU limit, priority fee - in header fields rather than ComputeBudget instructions; always set these explicitly, since defaults may be 0 and the transaction will fail.
 
 **Scaling beyond one transaction.** The `@solana/instruction-plans` package handles scaling beyond a single transaction. It allows you to define operations as sequential, parallel, or non-divisible and then automatically packs them into optimally-sized transactions with concurrent sending.
 
 ## 7. Enterprise Use Cases
 
-**Payroll and treasury disbursement.** A corporate treasury approves a batch of salary payments in stablecoins - hundreds of transfers packed into a handful of transactions, all settling in under a second with sub-cent fees.
+**Payroll and treasury disbursement.** A corporate treasury approves a batch of salary payments in stablecoins - hundreds of transfers packed into a handful of transactions, all finalizing in under a second with sub-cent fees.
 
 **Fund subscription and redemption settlement.** An asset manager processes investor subscriptions and redemptions through a platform, with the actual token minting, burning, and transferring settling on Solana in real time.
 
 **Supply chain and trade finance payments.** A manufacturer ships goods, the bill of lading is tokenized on-chain, and payment releases automatically when the goods clear customs.
 
-**Cross-border B2B settlement.** A U.S. company pays a supplier in Singapore using USDC on Solana. The payment settles in 400ms with fee payer abstraction so neither party needs to hold SOL. The memo field carries the invoice reference for reconciliation.
+**Cross-border B2B settlement.** A U.S. company pays a supplier in Singapore using USDC on Solana. The payment is final in well under a second (~150ms finality target) with fee payer abstraction so neither party needs to hold SOL. The memo field carries the invoice reference for reconciliation.
 
 ---
 

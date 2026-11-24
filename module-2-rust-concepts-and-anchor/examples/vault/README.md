@@ -88,6 +88,9 @@ pub fn handler(ctx: Context<Initialize>) -> Result<()> {
 
 In here, we perform a CPI to the System Program to transfer enough lamports from the user to the vault to cover the rent-exempt minimum balance.
 
+> [!NOTE]
+> Never hardcode a rent figure: the rent rate is being reduced in steps (SIMD-0437), so always derive it at runtime. In production code, read the Rent sysvar with `Rent::get()?.minimum_balance(len)`, which returns the cluster's current rate. `Rent::free()` builds a zero-rate `Rent` value rather than reading the sysvar. See [Reduced rent](https://solana.com/upgrades/reduced-rent).
+
 ---
 
 ### Users will be able to deposit SOL into their vault

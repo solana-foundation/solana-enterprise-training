@@ -109,7 +109,7 @@ The difference between `createTransferTransaction()` and `createTransferInstruct
 - `createTransferTransaction()` returns a complete, ready-to-sign transaction. Use it for single transfers.
 - `createTransferInstructions()` returns just the instructions. Use it when you need to compose multiple operations into one transaction.
 
-**Transaction size limit:** Solana transactions are capped at ~1,232 bytes. In practice, this allows 4-6 transfers per transaction depending on memo length and whether ATAs need to be created. For larger batches, split across multiple transactions.
+**Transaction size limit:** legacy and v0 transactions (what this example sends) are capped at 1,232 bytes, which in practice allows 4-6 transfers per transaction depending on memo length and whether ATAs need to be created. Since September 2026, **v1 transactions** allow up to 4,096 bytes, so a single atomic batch can carry several times more transfers (v1 carries accounts inline instead of using address lookup tables, and the compute budget goes in header fields that you should always set explicitly). For larger batches, split across multiple transactions.
 
 ---
 
@@ -117,7 +117,7 @@ The difference between `createTransferTransaction()` and `createTransferInstruct
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+ (the npm scripts load the Mosaic SDK's WASM crypto module with `--experimental-wasm-modules`; use `npm run`, not `npx tsx` directly)
 - A Solana devnet wallet with SOL for fees
 - A Token-2022 stablecoin mint deployed on devnet
 

@@ -69,6 +69,7 @@ Companion to Module 1 for EVM-native teams; runnable as a standalone session.
 - Mint Account fields: supply, decimals, mint authority, freeze authority
 - Token Account fields: mint, owner, amount
 - Associated Token Accounts (ATAs) and deterministic derivation
+- p-token (SIMD-0266, live May 13 2026): the Pinocchio-based reimplementation of the Token Program at the same address - drop-in compatible, far lower CU costs, new `batch`, `withdraw_excess_lamports`, and `unwrap_lamports` instructions
 - Token metadata via Metaplex: Metadata Accounts, on-chain and off-chain metadata
 - Minting SPL Tokens using Anchor and TypeScript
 
@@ -81,6 +82,7 @@ Companion to Module 1 for EVM-native teams; runnable as a standalone session.
 - Token Extensions Program architecture: TLV data and backward compatibility
 - Mint extensions: confidential transfer, transfer fees, closing mint, interest-bearing tokens, non-transferable tokens, permanent delegate, transfer hook, metadata pointer, and metadata
 - Account extensions: memo required on transfer, immutable ownership, default account state, CPI guard
+- Newer mint extensions for regulated assets: ScaledUiAmount (display multiplier for stock splits and dividends), Pausable, and PermissionedBurn
 - Token ACL (Access Control List): permissioned tokens for enterprise compliance
 - Token ACL architecture: Default Account State, Gate Programs, freeze/thaw workflows
 - Token ACL vs. Transfer Hooks: when to use each approach
@@ -99,20 +101,22 @@ Companion to Module 1 for EVM-native teams; runnable as a standalone session.
 - Live proof points: Franklin Templeton, Spiko, Ondo, Maple Finance, Homebase
 - DeFi composability with tokenized assets
 
-**Slides:** [Link to RWAs on Solana slides - PLACEHOLDER]
+**Slides:**
+[RWAs on Solana slides](https://docs.google.com/presentation/d/16y_jKuaxeoiWLZlFzESOXqQ2Z1ij9G3t0PKLVvf55-8/edit?usp=sharing)
 
 ### Module 6 - DeFi on Solana
 
 **Topics:**
 - DeFi fundamentals and why Solana is suited for decentralized finance
 - Decentralized exchanges: AMMs, CLOBs (Phoenix, OpenBook), and concentrated liquidity
-- Lending and borrowing protocols: Kamino, MarginFi
+- Lending and borrowing protocols: Kamino, Project 0 (formerly MarginFi)
 - Liquid staking: Marinade, Jito, BlazeStake
 - Yield strategies and vaults
 - Enterprise applications: treasury management, liquidity provision, on-chain settlement
 - Programmatic interactions
 
-**Slides:** [Link to DeFi on Solana slides - PLACEHOLDER]
+**Slides:**
+[DeFi on Solana slides](https://docs.google.com/presentation/d/1dfxjxkYgLg7nMD7uXt2H-kdEILQOQcvqm-btso--YjM/edit?usp=sharing)
 
 ### Module 7 - Payments on Solana
 
@@ -125,7 +129,8 @@ Companion to Module 1 for EVM-native teams; runnable as a standalone session.
 - Batch payments, transaction atomicity, and scaling
 - Enterprise use cases: payroll, fund settlement, supply chain payments, cross-border B2B
 
-**Slides:** [Link to Payments slides - PLACEHOLDER]
+**Slides:**
+[Payments on Solana slides](https://docs.google.com/presentation/d/1r0NH_Wl8IaxayDh_cKcUzPIfKqaiCahvILANlokdHgg/edit?usp=sharing)
 
 ### Module 7B - Subscriptions and Recurring Payments
 
@@ -149,7 +154,7 @@ Companion to Module 1 for EVM-native teams; runnable as a standalone session.
 - Token-2022 Confidential Transfers: instruction flow and confidential token account state
 - Selective disclosure and the auditor key pattern
 - Private Channels: architecture, transaction pipeline, banking use case, comparison with Mainnet
-- The wider privacy ecosystem: confidential computation (Arcium, Light Protocol)
+- The wider privacy ecosystem: confidential computation (Arcium, ZK Compression (Helius/Light))
 
 **Slides:**
 [Privacy on Solana slides](https://docs.google.com/presentation/d/1TCHMCpv6i3vFZAT68btsTQOMncXXMk1I70hyIZUEHSY/edit?usp=sharing)
@@ -164,6 +169,7 @@ Companion to Module 1 for EVM-native teams; runnable as a standalone session.
 - Yellowstone gRPC and the Geyser plugin interface
 - Indexing frameworks: Carbon and Vixen
 - Real-time streaming: LaserStream and Enhanced WebSockets
+- Protocol changes indexers must handle: no vote transactions since Alpenglow, Agave 4.3 Geyser callbacks, v1 transactions
 - Production indexer architecture
 
 **Slides:**
@@ -174,8 +180,8 @@ Companion to Module 1 for EVM-native teams; runnable as a standalone session.
 **Topics:**
 - Why AI agents need programmatic payment rails; where traditional rails fail
 - The friction problem: accounts, API keys, and broken agent workflows
-- Why Solana: sub-cent fees, sub-second finality, stablecoin settlement
-- The x402 protocol: HTTP 402, PaymentRequirements, the X-PAYMENT header
+- Why Solana: sub-cent fees, 200ms slots and ~150ms finality, stablecoin settlement
+- The x402 protocol (v2): HTTP 402, PaymentRequirements, the PAYMENT-REQUIRED / PAYMENT-SIGNATURE / PAYMENT-RESPONSE headers, CAIP-2 network IDs; v1 legacy differences
 - The payment flow: request, 402 challenge, signed payment, verify, settle, respond
 - Facilitators: what they abstract and the dependencies they introduce
 - Server-side and client-side implementation patterns
@@ -184,7 +190,7 @@ Companion to Module 1 for EVM-native teams; runnable as a standalone session.
 - Enterprise use cases: API metering, MCP monetization, agent-to-agent commerce
 
 **Slides:**
-[Agentic Payments slides](module-10-agentic-payments/Agentic%20Payments%20-%20Slides.pptx)
+[Agentic Payments slides](https://docs.google.com/presentation/d/1z0tCp_ptb_0Ho_hopZL9hJhTIQnWM-UMl1hUJWdizwo/edit?usp=sharing)
 
 ### Module 11 - Security on Solana
 
@@ -194,12 +200,12 @@ Companion to Module 1 for EVM-native teams; runnable as a standalone session.
 - The program security checklist: ownership, signers, substitution, type confusion, arithmetic, CPI safety, account closing, PDA canonicalization, duplicate accounts
 - Anchor as a security tool and its limits
 - Token security: authorities, delegates, and Token-2022 extension interactions
-- Case studies: Wormhole, Cashio, Mango Markets, Slope
-- Operational security: upgrade authority lifecycle, key management, monitoring, incident response
+- Case studies: Wormhole, Cashio, Mango Markets, Slope, Drift (Apr 2026: social engineering of admin multisig signers + pre-signed durable-nonce transactions)
+- Operational security: upgrade authority lifecycle, key management, multisig signer discipline and timelocks, monitoring, incident response
 - Economic security: oracles and market manipulation
 - The audit process and security development lifecycle
 
-**Slides:** [Security on Solana slides](module-11-security-on-solana/Security%20on%20Solana%20-%20Slides.pptx)
+**Slides:** [Security on Solana slides](https://docs.google.com/presentation/d/141W4WGYF5ZhbLjD_wipM_WMH3vwQgW3Qr5KY-PhR5ho/edit?usp=sharing)
 
 ## Assessment Approach
 

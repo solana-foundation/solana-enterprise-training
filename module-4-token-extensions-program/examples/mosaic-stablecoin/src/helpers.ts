@@ -35,7 +35,11 @@ export function getRpc(): Rpc<SolanaRpcApi> {
 
 export function getRpcSubscriptions(): RpcSubscriptions<SolanaRpcSubscriptionsApi> {
   const httpUrl = process.env.RPC_URL ?? "https://api.devnet.solana.com";
-  const wsUrl = httpUrl.replace("https://", "wss://").replace("http://", "ws://");
+  // A local test validator serves websockets on port 8900, next to RPC on 8899.
+  const wsUrl = httpUrl
+    .replace("https://", "wss://")
+    .replace("http://", "ws://")
+    .replace(":8899", ":8900");
   return createSolanaRpcSubscriptions(wsUrl);
 }
 

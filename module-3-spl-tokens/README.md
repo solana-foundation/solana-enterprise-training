@@ -33,6 +33,20 @@ Token Programs contain all the instruction logic for interacting with tokens on 
 
 All mint accounts and token accounts on Solana are owned by one of these two programs.
 
+### p-token: the Token Program, rewritten
+
+Since **May 13, 2026** (SIMD-0266), the Token Program at its original address (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) runs **p-token**, a reimplementation built with the Pinocchio framework. It is a drop-in replacement: same program ID, same account layouts, same instructions, so existing mints, token accounts, and clients keep working unchanged. What changed is cost:
+
+| Instruction | Before p-token | p-token |
+|-------------|----------------|---------|
+| `Transfer` | ≈ 4,645 CU | ≈ 76 CU |
+| `TransferChecked` | ≈ 6,200 CU | ≈ 105 CU |
+
+p-token also adds new instructions: `batch` (several token instructions in one call), `withdraw_excess_lamports` (recover lamports sent to a token account or mint beyond its rent-exempt minimum), and `unwrap_lamports` (move SOL out of a wrapped-SOL token account without closing it). See [p-token](https://solana.com/upgrades/p-token).
+
+> [!NOTE]
+> p-token applies to the original Token Program only. Token-2022 is a separate program with its own costs. When choosing between them, decide on features (do you need extensions?) rather than on old CU figures you may find in pre-2026 material.
+
 ## 2. SPL Tokens
 
 Tokens on Solana are referred to as **SPL Tokens**. Each token is uniquely identified by the address of its **Mint Account**, which is owned by the Token Program.

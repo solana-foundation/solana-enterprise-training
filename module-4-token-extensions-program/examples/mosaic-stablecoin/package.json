@@ -5,23 +5,26 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "create-token": "npx tsx src/01-create-stablecoin.ts",
-    "mint-tokens": "npx tsx src/02-mint-tokens.ts",
-    "blocklist": "npx tsx src/03-blocklist-address.ts",
-    "force-transfer": "npx tsx src/04-force-transfer.ts",
-    "pause-token": "npx tsx src/05-pause-token.ts",
-    "inspect-token": "npx tsx src/06-inspect-token.ts"
+    "create-token": "node --experimental-wasm-modules --import tsx src/01-create-stablecoin.ts",
+    "mint-tokens": "node --experimental-wasm-modules --import tsx src/02-mint-tokens.ts",
+    "blocklist": "node --experimental-wasm-modules --import tsx src/03-blocklist-address.ts",
+    "force-transfer": "node --experimental-wasm-modules --import tsx src/04-force-transfer.ts",
+    "pause-token": "node --experimental-wasm-modules --import tsx src/05-pause-token.ts",
+    "inspect-token": "node --experimental-wasm-modules --import tsx src/06-inspect-token.ts"
   },
   "dependencies": {
-    "@solana/kit": "^5.0.0",
-    "@solana-program/system": "^0.10.0",
-    "@solana-program/token-2022": "^0.6.1",
-    "@solana/mosaic-sdk": "^0.1.1",
+    "@solana/kit": "^6.10.0",
+    "@solana-program/system": "^0.12.2",
+    "@solana-program/token-2022": "^0.10.0",
+    "@solana/mosaic-sdk": "^0.2.0",
     "dotenv": "^16.4.7"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "tsx": "^4.19.0",
     "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

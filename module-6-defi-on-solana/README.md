@@ -31,12 +31,12 @@ Decentralized finance replaces traditional financial intermediaries with on-chai
 
 Solana's architecture delivers the performance characteristics that DeFi demands:
 
-- **High throughput** - 5,000+ TPS enables order book-style trading and high-frequency interactions that are impractical on slower chains
-- **Sub-second finality** - 400ms block times allow DeFi protocols to respond to market conditions in near real-time
+- **High throughput** - Thousands of user transactions per second, with a 100M compute unit (CU) block limit, enable order book-style trading and high-frequency interactions that are impractical on slower chains
+- **Sub-second finality** - 200ms slots and a ~150ms finality target (Alpenglow, live since October 2026) allow DeFi protocols to respond to market conditions in near real-time
 - **Low fees** - Transaction costs below $0.001 make micro-transactions, frequent rebalancing, and complex multi-instruction transactions economically viable
 - **Parallel execution** - Non-conflicting DeFi transactions execute simultaneously, reducing congestion during high-volume periods
 
-As of late 2025, Solana's DeFi ecosystem holds over $3.6 billion in total value locked (TVL) across lending markets alone, with 33% year-over-year growth.
+Solana consistently ranks among the largest DeFi ecosystems by total value locked (TVL), with lending as its biggest category. TVL moves with token prices, so check [DefiLlama](https://defillama.com/chain/Solana) for the current figure rather than relying on a snapshot.
 
 ## 2. Decentralized Exchanges and AMMs
 
@@ -52,11 +52,11 @@ AMMs use liquidity pools instead of order books. Liquidity providers (LPs) depos
 
 A CLOB is the same model used by traditional stock exchanges and FX markets - a book of buy and sell orders matched by price and time priority. Running an on-chain order book requires placing, canceling, and matching orders as individual transactions, which makes it prohibitively expensive on high-fee chains like Ethereum.
 
-Solana's sub-cent transaction costs and 400ms block times make on-chain CLOBs viable for the first time. For enterprise teams coming from traditional finance, this is one of the most intuitive entry points into DeFi - the mechanics are identical to what they already use, but running on permissionless, 24/7 infrastructure.
+Solana's sub-cent transaction costs, 200ms slots, and ~150ms finality target make on-chain CLOBs viable for the first time. For enterprise teams coming from traditional finance, this is one of the most intuitive entry points into DeFi - the mechanics are identical to what they already use, but running on permissionless, 24/7 infrastructure.
 
-**Phoenix** is the leading on-chain CLOB on Solana. It features a fully on-chain order book with deterministic matching, minimal MEV exposure, and atomic settlement. Phoenix is designed for institutional-grade trading with features like self-custodied limit orders and transparent price discovery.
+**Phoenix** is a fully on-chain CLOB on Solana. It features a fully on-chain order book with deterministic matching, minimal MEV exposure, and atomic settlement. Phoenix is designed for institutional-grade trading with features like self-custodied limit orders and transparent price discovery.
 
-**OpenBook** is the community-maintained successor to the original Serum order book. It provides a permissionless on-chain order book that other protocols can build on top of, serving as shared infrastructure for the ecosystem.
+**OpenBook** is the community-maintained successor to the original Serum order book (confirm current maintenance status before building on it). It provides a permissionless on-chain order book that other protocols can build on top of, serving as shared infrastructure for the ecosystem.
 
 ### DEX Aggregation
 
@@ -64,9 +64,9 @@ Rather than routing through a single DEX, aggregators split trades across multip
 
 ### Key Protocols
 
-**Raydium** combines AMM functionality with concentrated liquidity positions. Its TVL reached $2.3 billion in Q3 2025, growing 32.3% quarter-over-quarter. Raydium is a foundational liquidity layer for the Solana ecosystem.
+**Raydium** combines AMM functionality with concentrated liquidity positions. Raydium is a foundational liquidity layer for the Solana ecosystem.
 
-**Jupiter** has evolved from a DEX aggregator into Solana's most comprehensive DeFi platform, processing over $700 million in daily swap volume. Jupiter routes trades across multiple liquidity sources including Raydium, Orca, Phoenix, and other DEXs to deliver the best available execution.
+**Jupiter** has evolved from a DEX aggregator into Solana's most comprehensive DeFi platform and handles a large share of Solana's swap volume. Jupiter routes trades across multiple liquidity sources including Raydium, Orca, Phoenix, and other DEXs to deliver the best available execution.
 
 **Orca** focuses on concentrated liquidity through its Whirlpools product, offering LPs fine-grained control over their capital deployment.
 
@@ -84,9 +84,9 @@ Interest rates are typically determined algorithmically based on the utilization
 
 ### Key Protocols
 
-**Kamino Finance** maintains the largest DeFi TVL on Solana at $2.8 billion. Kamino 2.0 introduced K-Lend, a fully integrated lending application with a Market Layer and curator-managed Vault Layer for institutional-grade risk management.
+**Kamino Finance** is consistently one of the largest DeFi protocols on Solana by TVL. Kamino Lend V2 introduced a modular architecture with a Market Layer and curator-managed Vault Layer for institutional-grade risk management.
 
-**MarginFi** differentiates through its multi-market structure: interconnected core asset markets, isolated pools for higher-risk tokens, and dedicated liquid staking collateral options. It emphasizes sophisticated risk management systems and capital efficiency through leverage and composability.
+**Project 0 (formerly MarginFi)** was renamed in September 2025 and repositioned as a multi-venue DeFi prime broker. Its lending heritage differentiates through a multi-market structure: interconnected core asset markets, isolated pools for higher-risk tokens, and dedicated liquid staking collateral options. It emphasizes sophisticated risk management systems and capital efficiency through leverage and composability.
 
 ### Enterprise Relevance
 
@@ -98,7 +98,7 @@ Liquid staking allows SOL holders to stake their tokens and participate in netwo
 
 **Why it matters:** Traditional staking locks capital. Liquid staking tokens can be used throughout DeFi - as collateral for borrowing, in liquidity pools, or in yield strategies - while still earning staking rewards.
 
-**Key protocols:** Marinade (mSOL), Jito (JitoSOL), and BlazeStake (bSOL) are the leading liquid staking providers on Solana.
+**Key protocols:** Marinade (mSOL), Jito (JitoSOL), and BlazeStake (bSOL) are the leading liquid staking providers on Solana. Staking has also reached TradFi wrappers: spot SOL ETFs that stake their holdings now trade in the US (e.g. Bitwise BSOL, VanEck, Grayscale, Franklin, REX-Osprey).
 
 For enterprises, liquid staking offers a way to earn yield on SOL holdings without sacrificing liquidity or operational flexibility.
 
@@ -157,6 +157,6 @@ See the [challenge/](challenge/) folder for this module's challenge.
 - [Jupiter Documentation](https://docs.jup.ag/)
 - [Kamino Finance Documentation](https://docs.kamino.finance/)
 - [Raydium Documentation](https://docs.raydium.io/)
-- [MarginFi Documentation](https://docs.marginfi.com/)
+- [Project 0 (formerly MarginFi)](https://blog.0.xyz/blog/introducing-project-0)
 - [Marinade Finance Documentation](https://docs.marinade.finance/)
 - [Solana DeFi Overview - DeFiLlama](https://defillama.com/chain/Solana)

@@ -21,17 +21,17 @@
 
 ## Slides
 
-[RWAs on Solana Slides]((https://docs.google.com/presentation/d/16y_jKuaxeoiWLZlFzESOXqQ2Z1ij9G3t0PKLVvf55-8/edit?usp=sharing))
+[RWAs on Solana Slides](https://docs.google.com/presentation/d/16y_jKuaxeoiWLZlFzESOXqQ2Z1ij9G3t0PKLVvf55-8/edit?usp=sharing)
 
 ---
 
 ## 1. The $16 Trillion Opportunity
 
-BCG projects $16 trillion in tokenized assets by 2030. This is not a speculative thesis - it is a third-party analyst projection grounded in credible research and backed by institutional action.
+In a 2022 report, BCG (with ADDX) projected that tokenized illiquid assets could reach $16 trillion by 2030. Treat it as a third-party projection rather than a forecast of record - but it is increasingly backed by institutional action.
 
 BlackRock, Franklin Templeton, and Fidelity are already moving assets on-chain in production. When the world's largest asset managers are live, the question is no longer "if" but "where and how fast."
 
-Tokenization has moved past the exploratory phase. The infrastructure is being built and deployed today.
+Tokenization has moved past the exploratory phase. The infrastructure is being built and deployed today: as of November 2026, Solana hosts roughly $5.1 billion in tokenized RWAs across 3,500+ assets ([RWA.xyz via Crypto Briefing](https://cryptobriefing.com/solana-rwa-ecosystem-surpasses-5-billion/)).
 
 ## 2. What Tokenization Does
 
@@ -53,15 +53,18 @@ Not all blockchains are equally suited for tokenized real world assets. The requ
 
 **Private chains** offer full control, but sacrifice composability. Assets locked on a private ledger cannot participate in the broader DeFi ecosystem, limiting their utility and liquidity.
 
-**Solana** provides the combination that regulated finance requires: a public chain with native compliance primitives, proven throughput (5,000+ TPS, 400ms block times), and transaction costs below $0.001. The Token Extensions Program delivers compliance tooling at the protocol level rather than as an afterthought.
+**Solana** provides the combination that regulated finance requires: a public chain with native compliance primitives, proven throughput (thousands of user transactions per second, 200ms slots, ~150ms finality target under Alpenglow), and transaction costs below $0.001. The Token Extensions Program delivers compliance tooling at the protocol level rather than as an afterthought.
 
 ## 4. Token Extensions - Compliance by Design
 
 The Token Extensions covered in Module 4 are not abstract features - they are the compliance infrastructure layer that makes regulated asset issuance possible on a public blockchain.
 
 - **Transfer Hooks / ACL** - Enforce allowlists, KYC gates, and jurisdiction rules at every transfer
-- **Confidential Transfers** - Encrypted balances with selective disclosure for auditors
-- **Permanent Delegate** - Issuer can natively freeze and recover tokens (required in many jurisdictions for sanctioned entities)
+- **Confidential Transfers** - Encrypted balances with selective disclosure for auditors (live on mainnet again since the ZK ElGamal Proof program was re-enabled in June 2026 via Agave 4.0)
+- **Freeze Authority / Default Account State** - Issuer can freeze individual accounts, or have every new account start frozen until KYC clears (freeze authority is a core mint field; Default Account State is the extension)
+- **Permanent Delegate** - Issuer can transfer or burn tokens from any account to recover or seize assets (required in many jurisdictions for sanctioned entities or court orders)
+- **Pausable** - Issuer can halt all transfers, mints, and burns for the mint during an incident or corporate action
+- **ScaledUiAmount** - A display multiplier the issuer can update, so tokenized stocks reflect splits and dividends without touching every holder's balance
 - **Required Memo** - Attach ISIN codes, trade IDs, or AML flags natively to every transfer
 - **Non-Transferable** - Restrict tokens to original purchasers or KYC-verified holders
 
@@ -82,7 +85,7 @@ The range of assets being tokenized on Solana spans the full spectrum of traditi
 
 Tokenized RWAs on Solana are not theoretical - multiple products are live in production today:
 
-- **Franklin Templeton FOBXX** - $380M+ AUM, a money market fund operating fully on-chain
+- **Franklin Templeton FOBXX (BENJI)** - A U.S. government money market fund whose share register runs on-chain, extended to Solana in February 2025
 - **Spiko** - EU-regulated UCITS T-bill and money market tokens
 - **Ondo USDY** - A yield-bearing stablecoin backed by U.S. Treasury bills
 - **Maple Finance** - Institutional credit and undercollateralized lending
@@ -92,7 +95,7 @@ Tokenized RWAs on Solana are not theoretical - multiple products are live in pro
 
 One of the most powerful aspects of tokenizing assets on a public blockchain is composability with existing DeFi protocols. This creates entirely new financial primitives that are impossible in traditional finance.
 
-**Tokenized T-bills as lending collateral.** An institution holding tokenized T-bills can use them as collateral in protocols like Kamino or MarginFi to borrow USDC instantly - no phone calls, no paperwork, no waiting for settlement.
+**Tokenized T-bills as lending collateral.** An institution holding tokenized T-bills can use them as collateral in protocols like Kamino or Project 0 (formerly MarginFi) to borrow USDC instantly - no phone calls, no paperwork, no waiting for settlement.
 
 **Yield-bearing RWAs as LP positions.** Tokenized assets can be deployed into liquidity pools, earning trading fees on top of the underlying yield of the asset itself.
 

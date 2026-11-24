@@ -55,7 +55,7 @@ npm run all     # or run the six steps one by one
 
 Defaults to devnet if `RPC_URL` is unset (devnet's faucet can be
 rate-limited). ScaledUiAmount needs a recent Token-2022; any current Agave
-test validator (2.x+) and devnet/mainnet all support it.
+test validator (4.x) and devnet/mainnet all support it.
 
 To start over: delete `.state.json` and run from step 1.
 

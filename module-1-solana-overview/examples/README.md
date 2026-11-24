@@ -137,13 +137,13 @@ solana rent 165     # a token account
 solana rent 0       # bare account (no data, just the 128-byte overhead)
 ```
 
-Illustrative output for `solana rent 165`:
+Illustrative output for `solana rent 165` (historical value - what you see today will be lower, see the warning below):
 
 ```
 Rent-exempt minimum: 0.00203928 SOL
 ```
 
-The rent-exempt minimum is `lamports_per_byte_year × (128 + data_len) × 2 years`, with `lamports_per_byte_year = 3480`:
+Historically, the rent-exempt minimum was `lamports_per_byte_year × (128 + data_len) × 2 years`, with `lamports_per_byte_year = 3480` (that is, 6,960 lamports per byte). Worked example at that historical rate:
 
 ```
 165 bytes →  3480 × (128 + 165) × 2 = 2,039,280 lamports = 0.00203928 SOL
@@ -151,6 +151,20 @@ The rent-exempt minimum is `lamports_per_byte_year × (128 + data_len) × 2 year
 ```
 
 The "2 years" is **just this multiplier in a one-time calculation** not a recurring charge. The SOL becomes part of the account's balance and is **returned in full when the account is closed.**
+
+> [!WARNING]
+> **Do not hardcode these numbers.** SIMD-0437 is reducing the per-byte rate from 6,960 toward 696 lamports in feature-gated steps: step 1 (to 6,333) went live on September 3, 2026, and later steps are **pending** (Agave 4.4). Existing accounts are grandfathered. Always ask the cluster for the current value ([Reduced rent](https://solana.com/upgrades/reduced-rent)):
+>
+> ```bash
+> solana rent 165 --url mainnet-beta   # CLI
+> ```
+>
+> ```ts
+> // @solana/kit
+> const lamports = await rpc.getMinimumBalanceForRentExemption(165n).send();
+> ```
+>
+> On-chain, use `Rent::get()?.minimum_balance(len)`.
 
 ### Optional: Claim Rent back (devnet)
 
