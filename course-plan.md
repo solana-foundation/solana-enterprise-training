@@ -209,7 +209,8 @@ Companion to Module 1 for EVM-native teams; runnable as a standalone session.
 - Validator clients (Agave, Jito-Agave, Firedancer) and client diversity
 - The validator account model: identity, vote account, authorized voter/withdrawer, BLS key, stake accounts and authorities
 - Validator economics: inflation, commissions, block fees, MEV, the Validator Admission Ticket (VAT), and break-even
-- Enterprise staking options: native delegation, LSTs, custodial staking, running your own validator; validator due diligence; SFDP
+- Enterprise staking options: native delegation, LSTs, custodial staking, running your own validator; validator due diligence
+- The Solana Foundation Delegation Program (SFDP): how delegation works, its history, the November 2026 changes (12-month membership, 100-validator cap, 300k SOL graduation), the reasons behind them, and the debate around them
 - Build vs. buy for RPC and validator infrastructure
 - Operations: hardware, key custody, monitoring, upgrades, failover
 

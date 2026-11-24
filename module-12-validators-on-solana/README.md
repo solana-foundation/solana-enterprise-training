@@ -10,6 +10,7 @@ By the end of this module, participants will be able to:
 - Map the validator account model: identity, vote account, authorized voter/withdrawer, BLS key, and stake accounts with their authorities
 - Model validator economics: inflation rewards, commissions, block fees, MEV tips, the Validator Admission Ticket (VAT), and hardware costs
 - Compare staking options for an enterprise treasury: native staking, LSTs, custodial staking, and running your own validator
+- Explain how the Solana Foundation Delegation Program (SFDP) works, how it changed in November 2026, and why
 - Make a build-vs-buy decision for validator and RPC infrastructure, and outline the operational practices that matter: key management, monitoring, upgrades, and failover
 
 ## Topics Covered
@@ -20,6 +21,7 @@ By the end of this module, participants will be able to:
 - The validator account model
 - Validator economics
 - Staking for enterprises
+- The Solana Foundation Delegation Program (SFDP) and its November 2026 changes
 - Run your own vs. use a provider
 - Operations overview
 
@@ -208,7 +210,7 @@ A company holding SOL on its balance sheet has four ways to earn the staking yie
 | **Native delegation** to a third-party validator | Full, minus validator commission | About 1 epoch to unstake | You keep the withdraw key | Low: choose and monitor validators | Treasury with a long horizon and its own key infrastructure |
 | **Liquid staking token** (JitoSOL, mSOL, bSOL, ...) | Yield minus the pool fee | **Instant** via DEX swap (Module 6) | Smart contract risk on the pool | Very low | Treasury that needs liquidity or wants to use DeFi with staked SOL |
 | **Custodial / institutional staking** (Coinbase, Anchorage, BitGo, Figment, ...) | Yield minus custodian fee | Custodian's terms | Custodian holds keys (regulated) | Lowest | Regulated entities, auditors who want a qualified custodian |
-| **Run your own validator** and self-delegate | Full yield plus commission from others, minus all costs | About 1 epoch | Full | **High** (section 8) | Large holders, ecosystem players, infrastructure companies |
+| **Run your own validator** and self-delegate | Full yield plus commission from others, minus all costs | About 1 epoch | Full | **High** (section 9) | Large holders, ecosystem players, infrastructure companies |
 
 **Choosing a validator: due-diligence checklist**
 
@@ -219,9 +221,91 @@ A company holding SOL on its balance sheet has four ways to earn the staking yie
 - **Counterparty:** who operates it, what jurisdiction, SOC 2 or an equivalent, insurance, and whether a known entity stands behind it
 - **Diversify:** split large positions across several validators. Stake accounts can be split and redelegated
 
-**Solana Foundation Delegation Program (SFDP).** The Foundation delegates stake to new independent operators who meet performance, commission (≤5%; MEV ≤10%), version, and concentration criteria, after proving themselves on testnet. Since Nov 2026 membership is limited to 12 months, with vote-cost coverage tapering off, and validators exit once outside stake passes a threshold ([criteria](https://solana.org/delegation-criteria), [Nov 2026 changes](https://solanacompass.com/news/solana-foundation-puts-a-12-month-limit-and-300000-sol-exit-on-its-validator-delegation-program)). An enterprise launching a new validator should plan to stand on its own stake.
+**Solana Foundation Delegation Program (SFDP).** The Foundation also delegates stake to independent validators. Section 7 covers how it works and why it changed in November 2026.
 
-## 7. Run Your Own vs. Use a Provider
+## 7. The Solana Foundation Delegation Program (SFDP)
+
+The SFDP is how the Solana Foundation lends part of its own SOL stake to independent validators. It has shaped the validator set more than any other single policy: in August 2024, 1,105 of the network's 1,525 validators (72%) were SFDP members ([Helius](https://www.helius.dev/blog/solana-foundation-delegation-program-sfdp)). Anyone planning to run a validator, or choosing one to delegate to, needs to understand how it works and why it has just changed.
+
+As of November 2026 the program delegates about **23.7M SOL to roughly 330 validators**, about **5% of all staked SOL** ([Foundation dashboard via Solana Compass](https://solanacompass.com/news/solana-foundation-puts-a-12-month-limit-and-300000-sol-exit-on-its-validator-delegation-program)).
+
+### How it works
+
+The program's stated goals are a more decentralized, reliable network, more validators funded by a broad range of stakers, and a large, representative **testnet** where new releases are proven ([solana.org/delegation-program](https://solana.org/delegation-program)).
+
+**The path in.** An applicant passes KYC, runs a **testnet** validator first, and must meet the testnet performance baseline in at least 5 of the last 10 epochs before mainnet delegation starts. Operators must run their own validator: hosting at a provider is fine, white-label or managed validator services are not.
+
+**How much stake.** Delegation has two parts:
+
+| Component | Rule (Nov 2026) | Purpose |
+|---|---|---|
+| **Residual delegation** | Flat **5,000 SOL** per eligible validator | Gets a new validator onto the leader schedule |
+| **Matching** | **0.5 SOL for every 1 SOL of outside stake**, up to **50,000 SOL** of matched stake | Rewards operators who attract their own delegators |
+| **Vote cost coverage** | 100% → 75% → 50% → 25% of vote costs over four quarters, then nothing. First validator per entity only | Softens the fixed cost of the first year |
+
+A validator with 40,000 SOL from outside delegators gets 20,000 SOL matched plus the 5,000 SOL residual: 25,000 SOL from the Foundation, 65,000 SOL in total. Matching stops growing at 100,000 SOL of outside stake.
+
+**Ongoing criteria** ([solana.org/delegation-criteria](https://solana.org/delegation-criteria)):
+
+- Commission **≤ 5%** and Jito MEV commission **≤ 10%**
+- Skip rate no worse than the cluster average + 5 percentage points
+- Minimum client versions (Agave 4.4.0+ or Firedancer 26.10.6+; no Frankendancer), raised shortly after each supermajority upgrade
+- Concentration limits: the validator's data center may hold at most **15%** of network stake and its ASN / hosting company at most **25%** (since May 2026)
+- Fair transaction ordering, no private mempools or sandwiching (members were removed for this in June 2024), and timely response to critical network events
+
+### How the program has evolved
+
+| When | Change |
+|---|---|
+| **2020** | Launched with a 100M SOL pool. Foundation stake was **44%** of all staked SOL, spread widely to bootstrap the validator set |
+| **Dec 2023 → Apr 2024** | Redesign: 1:1 matching of outside stake up to 100k SOL, vote-cost coverage tapering over 12 months, hard cutoff for validators with large outside stake |
+| **Aug 2024** | 72% of validators were SFDP members, but 51% of members had attracted less than 1,000 SOL of outside stake. Helius estimated about 900 would be unprofitable without the program |
+| **Apr 2025** | "One in, three out": for every new validator added, three long-standing members with under 1,000 SOL of outside stake are removed ([Decrypt](https://decrypt.co/316097/solana-foundation-shifts-validator-strategy)) |
+| **Oct 2025** | Matching cut from 1:1 up to 100k SOL to 0.5:1 up to 50k SOL |
+| **2026** | Residual set at 5,000 SOL, commission cap 5%, data-center and ASN limits, Firedancer in and Frankendancer out. Foundation stake down to about **5%** of staked SOL |
+| **Nov 6, 2026** | Time-limited membership and a size cap (below) |
+
+Each step put more weight on **outside stake, performance and self-sufficiency**. The program went from being the network's main source of stake, to an incubator that matches outside stake, to a short, time-limited launchpad.
+
+### The November 2026 changes
+
+Effective **November 6, 2026** ([solana.org/faq](https://solana.org/faq), [Solana Compass](https://solanacompass.com/news/solana-foundation-puts-a-12-month-limit-and-300000-sol-exit-on-its-validator-delegation-program)):
+
+- **12-month membership.** Counted from a validator's first eligible mainnet epoch. After that it "retires" from the program. The Foundation stresses this is not a penalty: the validator keeps running and looks for stake elsewhere, and can apply for renewal.
+- **Graduation at 300,000 SOL of outside stake.** Validators that attract this much outside stake leave the program. (The criteria page still shows an older 1,000,000 SOL figure; the FAQ and the announcement use 300,000.)
+- **A cap of 100 validators** in the program at any one time. With about 330 members today, roughly 230 will leave unless their renewal is approved.
+- **Must operate your own validator.** No white-label or managed services.
+- **Transition.** Existing members who exceed the new limits are being retired in **weekly batches**. Members can apply to stay by documenting their contributions to the ecosystem; more than 100 had applied by mid-November.
+- **A separate track for contributors.** Validators that do significant work for network health (client development, testing, tooling) can receive **discretionary Foundation stake outside the SFDP**, as early Frankendancer operators did.
+
+### Why the Foundation made these changes
+
+The Foundation's reasoning, from its announcement and from statements by Jacob Creech of the Solana Foundation ([Solana Compass](https://solanacompass.com/news/solana-foundations-jacob-creech-says-sfdp-has-done-its-job-as-validator-removals-go-ahead)):
+
+1. **The program has done its job.** It was built to bootstrap new validators, keep testnet healthy, and get early testing of protocol changes. With a mature validator set and Alpenglow shipped, the Foundation sees the bootstrapping phase as complete.
+2. **A launchpad, not a permanent home.** Since 2023 the Foundation has said it wants self-sustaining validators. Data like "51% of members have under 1,000 SOL of outside stake" showed a large group of validators that existed only because of Foundation stake. The April 2025 policy openly targeted these "validators in name only."
+3. **Reward contribution, not just uptime.** The Foundation said the old criteria were too thin and too slow to adapt for a network that changes quickly. Discretionary stake lets it back operators who do real work for the network, such as the community cluster that tested Alpenglow, instead of anyone who meets a checklist.
+4. **The Foundation's stake is no longer the main lever.** Foundation stake fell from 44% of staked SOL in 2020 to about 5% today. Decentralization now depends far more on stake pools, LSTs and institutional delegators than on the SFDP.
+
+The Foundation says cutting validator numbers is not the goal, though it may happen, and that the rules will be applied gradually.
+
+### Context and criticism
+
+**The cost of running a small validator went up in relative terms.** Under Alpenglow every validator pays a flat **Validator Admission Ticket** of 0.8 SOL per epoch (about 290 SOL a year) whatever its stake (section 5). A flat cost hits small validators hardest, and they are exactly the ones SFDP has supported. The FAQ's vote-cost formula still dates from before Alpenglow, and it is **unconfirmed** whether vote-cost coverage now pays the VAT.
+
+**Operators pushed back.** In an open letter, the operator group **Layer33** asked the Foundation to pause the weekly retirements. It argued the 100-validator cap and 12-month limit would push experienced independent operators out and concentrate stake among large validators, and asked the Foundation to publish the analysis behind the 300k / 100 / 12-month numbers ([ChainCatcher](https://www.chaincatcher.com/en/article/2303982)). The Foundation declined to pause, but said discussion is ongoing. Some operators have already shut down nodes. Others argue that losing low-effort, subsidy-only validators is healthy.
+
+**Proposal to halve the VAT.** A validator operator opened [SIMD discussion #730](https://github.com/solana-foundation/solana-improvement-documents/discussions/730) to cut the VAT to 0.4 SOL per epoch, so more small validators can survive without SFDP. Anatoly Yakovenko and Anza engineers replied that the current VAT figure is arbitrary and should eventually be negligible. That suggests a reduction is plausible, but nothing is scheduled.
+
+**The numbers to watch.** About 690 validators today, down from a peak of about 2,560 in 2023, and a Nakamoto coefficient flat at about 18. Whether those numbers hold up after the retirements is the real test of the new policy.
+
+### What this means for an enterprise
+
+- **Planning your own validator:** don't build the business case on SFDP. At most you get 12 months of support and 5,000-55,000 SOL of stake, in a program capped at 100 members. Plan to bring your own stake (treasury, clients, partners) from day one. The 300,000 SOL graduation threshold assumes successful operators outgrow the program quickly.
+- **Choosing validators to delegate to:** SFDP membership used to be a useful quality signal (KYC, performance and MEV rules). With the 100-validator cap, being outside the program says little about quality, so do your own due diligence (section 6 checklist).
+- **Contributing to the ecosystem:** the Foundation's discretionary stake now goes to operators who contribute: running testnet and test clusters, client diversity, tooling. An enterprise validator that does that work has a better case for Foundation support than one that only meets the uptime criteria.
+
+## 8. Run Your Own vs. Use a Provider
 
 | Criterion | Commercial RPC (shared) | Dedicated node from a provider | Self-hosted RPC | Self-hosted consensus validator |
 |---|---|---|---|---|
@@ -240,7 +324,7 @@ A company holding SOL on its balance sheet has four ways to earn the staking yie
 - Large SOL treasury, ecosystem role, or infrastructure business → consider a **consensus validator**, ideally run with or by a professional operator at first.
 - Private / permissioned settlement → consider a Solana Permissioned Environment or private channels (Module 8). That is a different deployment model from joining mainnet consensus.
 
-## 8. Operations Overview
+## 9. Operations Overview
 
 What running a validator well involves. The [testnet runbook](examples/testnet-validator-runbook.md) has the commands.
 
@@ -318,13 +402,26 @@ Validator A: 0% commission, 9% of network stake, Agave, 3 skipped-slot incidents
 
 </details>
 
+### Question 6 - Counting on the SFDP
+
+Your infrastructure team proposes launching a company validator. Their business case assumes SFDP delegation will cover the gap until the validator is profitable. What is wrong with that plan?
+
+<details>
+<summary>Answer</summary>
+
+Since **November 2026** the SFDP is a short, capped launchpad. Membership lasts at most **12 months**, the program holds at most **100 validators**, and vote-cost coverage tapers from 100% to zero over that year. Delegation is a 5,000 SOL residual plus 0.5:1 matching of outside stake up to 50,000 SOL, so a validator with no outside delegators gets only about 5,000 SOL. That is nowhere near enough to cover the flat VAT (~290 SOL a year) from commission. The Foundation's stated goal is self-sustaining operators: SFDP has "done its job" as a bootstrap, and discretionary stake now goes to operators who contribute to network health. A sound plan funds the validator with the company's own treasury stake or client delegations from day one, treats SFDP as optional upside, and contributes to testnet or client diversity if it wants Foundation support.
+
+</details>
+
 ## Additional Resources
 
 - [Anza docs: Validator operations](https://docs.anza.xyz/operations/setup-a-validator), [Hardware requirements](https://docs.anza.xyz/operations/requirements), [Clusters & entrypoints](https://docs.anza.xyz/clusters/available)
 - [Solana: BLS keys and the Validator Admission Ticket](https://solana.com/upgrades/bls-pubkey-vat)
 - [Solana: Alpenglow upgrade overview](https://solana.com/upgrades/alpenglow)
 - [Firedancer documentation](https://docs.firedancer.io)
-- [Solana Foundation Delegation Program](https://solana.org/delegation-program) and [criteria](https://solana.org/delegation-criteria)
+- [Solana Foundation Delegation Program](https://solana.org/delegation-program), [criteria](https://solana.org/delegation-criteria) and [FAQ](https://solana.org/faq)
+- [Helius: The Solana Foundation Delegation Program explained](https://www.helius.dev/blog/solana-foundation-delegation-program-sfdp) (2024 background)
+- [Solana Compass: Jacob Creech says the SFDP has done its job](https://solanacompass.com/news/solana-foundations-jacob-creech-says-sfdp-has-done-its-job-as-validator-removals-go-ahead)
 - [Jito: TipRouter and MEV distribution](https://www.jito.network/blog/what-is-jito-tiprouter/)
 - [Solana Compass: decentralization statistics](https://solanacompass.com/statistics/decentralization)
 - [validators.app](https://www.validators.app) and [stakewiz](https://stakewiz.com) for validator due diligence

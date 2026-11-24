@@ -288,12 +288,14 @@ No vote account, no stake and no VAT.
 
 ## 10. Joining the SFDP
 
-The [Solana Foundation Delegation Program](https://solana.org/delegation-program) matches outside stake for new operators. Criteria at time of writing (always check [solana.org/delegation-criteria](https://solana.org/delegation-criteria)):
+The [Solana Foundation Delegation Program](https://solana.org/delegation-program) delegates a 5,000 SOL residual plus 0.5:1 matching of outside stake (up to 50,000 SOL matched) to new operators. The module README, section 7, explains the program and its November 2026 changes. Criteria at time of writing (always check [solana.org/delegation-criteria](https://solana.org/delegation-criteria) and the [FAQ](https://solana.org/faq)):
 
+- KYC, and you must operate the validator yourself (no white-label or managed services)
 - a testnet validator meeting the baseline in 5 of the last 10 epochs (this runbook gets you there)
 - commission at most 5% and Jito MEV commission at most 10%
 - skip rate within 5 points of the cluster average
 - minimum client versions (Agave 4.4.0+ or Firedancer 26.10.6+ on mainnet; no Frankendancer)
-- data-center and ASN concentration limits
-- KYC
-- since Nov 2026: a 12-month membership with tapering vote-cost coverage, and exit once outside stake passes a threshold
+- data-center (15%) and ASN (25%) stake concentration limits
+- fair transaction ordering, no private mempools or sandwiching
+
+Since **November 6, 2026**, membership lasts at most **12 months**, the program holds at most **100 validators** at a time, vote-cost coverage tapers 100/75/50/25% over that year, and validators graduate once outside stake exceeds **300,000 SOL**. Treat SFDP as a short launch boost, not a funding plan: line up your own stake before going to mainnet.

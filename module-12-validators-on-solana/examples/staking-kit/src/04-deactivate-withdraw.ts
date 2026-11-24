@@ -4,7 +4,7 @@
  * Unstaking is a two-step process separated by an epoch boundary:
  *
  *   run 1 (stake is active)       -> Deactivate (stake authority signs)
- *   ...wait for the next epoch (~2 days on mainnet)...
+ *   ...wait for the next epoch (~1 day on mainnet)...
  *   run 2 (stake is inactive)     -> Withdraw everything (withdraw authority signs)
  *
  * Run this script twice. It inspects the account and does whichever step is
